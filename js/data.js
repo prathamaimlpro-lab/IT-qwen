@@ -1,3 +1,4 @@
+import { LESSONS2, QUESTIONS2 } from './content2.js';
 /* IT QUEST v2 — content brain: levels, deep lessons, per-topic questions, arena, achievements. */
 
 export const XP = { lesson: 10, easy: 20, medium: 40, hard: 80, gate: 30, arena: 40 };
@@ -170,3 +171,4 @@ export const ACHIEVEMENTS = [
 
 
 export const ACCENTS = ['#f0561c', '#1f8a34', '#6a4dc4', '#d4a24e', '#d44d8f'];
+Object.assign(LESSONS, LESSONS2); Object.assign(QUESTIONS, QUESTIONS2);
