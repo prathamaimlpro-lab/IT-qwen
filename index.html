@@ -15,6 +15,14 @@
 <body>
 <div id="app"></div>
 <noscript>IT QUEST needs JavaScript enabled.</noscript>
+<script>
+window.addEventListener('error', function (e) {
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;background:#2a0f16;border:1px solid #ff5d73;color:#ffd7dd;padding:14px 16px;border-radius:12px;font:14px/1.5 monospace';
+  d.textContent = 'ERROR: ' + (e.message || '?') + ' | file: ' + (e.filename || '?').split('/').pop() + ' | line ' + (e.lineno || '?');
+  document.body.appendChild(d);
+}, true);
+</script>
 <script type="module" src="js/pages.js"></script>
 </body>
 </html>
