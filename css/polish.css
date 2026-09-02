@@ -227,3 +227,30 @@ h3,h4{font-family:var(--fb);font-weight:700}
 ::-webkit-scrollbar-thumb{background:#0d0d0d;border-color:var(--bg0)}
 :focus-visible{outline:2px solid var(--acc)}
 main::after{color:var(--faint)}
+/* v5 — SOFTENED EDITORIAL + PRO DASHBOARD + MOTION */
+:root{--line:rgba(13,13,13,.12);--line2:rgba(13,13,13,.08)}
+*{border-radius:12px!important}
+.btn{border-radius:999px!important}
+.progress-bar,.progress-bar i{border-radius:999px!important}
+.swatch{border-radius:50%!important}
+html{scroll-behavior:smooth}
+.card{border-color:var(--line);transition:transform .35s cubic-bezier(.22,.61,.2,1),box-shadow .35s,border-color .35s}
+.card.clickable:hover{transform:translateY(-3px);box-shadow:0 14px 34px rgba(13,13,13,.10);border-color:rgba(13,13,13,.25)}
+.topbar,.sidebar,.bottomnav{background:#101010}
+.page{animation:pgIn .55s cubic-bezier(.22,.61,.2,1) both}
+@keyframes pgIn{from{opacity:0;transform:translateY(16px);filter:blur(8px)}to{opacity:1;transform:none;filter:blur(0)}}
+.page-head h1,.lesson-title{animation:maskUp .7s cubic-bezier(.22,.61,.2,1) both}
+@keyframes maskUp{from{clip-path:inset(0 0 100% 0);transform:translateY(24px)}to{clip-path:inset(0 0 -12% 0);transform:none}}
+.page-head::after{content:"EDITION 001 — LEVEL 0 CURRICULUM · AE3301";display:block;font-family:var(--fm);font-size:.66rem;letter-spacing:.2em;color:var(--faint);margin-top:10px}
+.rv{transition-duration:.7s}
+.stats-grid{gap:0;border:1px solid var(--line);background:var(--panel)}
+.stat-tile{background:transparent;border:none;border-left:1px solid var(--line)}
+.stat-tile:first-child{border-left:none}
+.skills-grid{counter-reset:sk}
+.skill-tile{counter-increment:sk}
+.skill-tile h4::after{content:" (0" counter(sk) ")";font-family:var(--fm);font-weight:500;font-size:.68rem;color:var(--faint)}
+.avatar-btn{font-size:0;background:#161616}
+.avatar-btn::after{content:"Æ";font-family:var(--fb);font-weight:800;font-size:1.05rem;color:#f4f4f2;display:grid;place-items:center;width:100%;height:100%}
+.ava-big{font-size:0;background:#161616 repeating-linear-gradient(0deg,transparent 0 6px,rgba(244,244,242,.05) 6px 7px)}
+.ava-big::after{content:"Æ";font-family:var(--fb);font-weight:800;font-size:3rem;color:#f4f4f2;display:grid;place-items:center;width:100%;height:100%}
+.code-box:focus{box-shadow:0 0 0 2px var(--acc)}
