@@ -151,3 +151,26 @@ function files(root) {
   draw();
 }
 REG.files = files;
+/* PATHS SIM: absolute vs relative, live */
+function paths(root) {
+  const T = { '/': 'd', '/home': 'd', '/home/me': 'd', '/home/me/docs': 'd', '/etc': 'd', '/home/me/notes.txt': 'f', '/home/me/docs/report.pdf': 'f', '/etc/conf.cfg': 'f' };
+  let target = '/home/me/docs/report.pdf', cur = '/home/me';
+  const q = s => root.querySelector(s);
+  function rel(from, to) {
+    const a = from.split('/').filter(Boolean), b = to.split('/').filter(Boolean);
+    let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;
+    const up = a.length - i, rest = b.slice(i);
+    return (up ? Array(up).fill('..').join('/') + (rest.length ? '/' : '') : './') + rest.join('/');
+  }
+  root.innerHTML = '<div class="mem-grid"><div class="mem-box" style="text-align:left"><h5 style="color:var(--acc)">PICK A TARGET FILE</h5><div data-files style="display:flex;flex-direction:column;gap:6px"></div><h5 style="color:var(--gold);margin-top:12px">YOU ARE HERE</h5><div data-dirs style="display:flex;flex-direction:column;gap:6px"></div></div><div class="mem-box"><h5>ABSOLUTE</h5><div class="cpu-status" data-abs></div><h5 style="margin-top:10px">RELATIVE (from here)</h5><div class="cpu-status" data-rel></div><p class="muted" style="font-size:.8rem;margin-top:10px">Same file, two addresses. Absolute never changes; relative depends on where you stand.</p></div></div>';
+  function draw() {
+    q('[data-files]').innerHTML = Object.keys(T).filter(k => T[k] === 'f').map(k => '<button class="q-opt" style="padding:6px 10px;min-height:0;text-align:left" data-f="' + k + '">📄 ' + k + '</button>').join('');
+    q('[data-dirs]').innerHTML = Object.keys(T).filter(k => T[k] === 'd').map(k => '<button class="q-opt" style="padding:6px 10px;min-height:0;text-align:left" data-d="' + k + '">📁 ' + k + '</button>').join('');
+    root.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { target = b.dataset.f; draw(); }));
+    root.querySelectorAll('[data-d]').forEach(b => b.addEventListener('click', () => { cur = b.dataset.d; draw(); }));
+    q('[data-abs]').textContent = target;
+    q('[data-rel]').textContent = rel(cur, target);
+  }
+  draw();
+}
+REG.paths = paths;
