@@ -392,3 +392,27 @@ onboarding();
   new MutationObserver(enhance).observe(document.getElementById('view'), { childList: true, subtree: true });
   enhance();
 })();
+/* SHELL EXTRAS: collapsible sidebar + dark mode + drifting code glyphs */
+(function () {
+  const bar = document.querySelector('.topbar');
+  if (bar && !document.querySelector('[data-sb]')) {
+    const t = document.createElement('button'); t.className = 'chip'; t.dataset.sb = '1'; t.style.cursor = 'pointer'; t.textContent = '☰';
+    t.onclick = () => { document.body.classList.toggle('sb-hidden'); localStorage.setItem('ae3301:sb', document.body.classList.contains('sb-hidden') ? '1' : ''); };
+    bar.prepend(t);
+  }
+  if (localStorage.getItem('ae3301:sb') === '1') document.body.classList.add('sb-hidden');
+  const chips = document.querySelector('.hdr-chips');
+  if (chips && !document.querySelector('[data-th]')) {
+    const th = document.createElement('button'); th.className = 'chip'; th.dataset.th = '1'; th.style.cursor = 'pointer';
+    const paint = () => { th.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙'; };
+    th.onclick = () => { document.body.classList.toggle('dark'); localStorage.setItem('ae3301:dark', document.body.classList.contains('dark') ? '1' : ''); paint(); };
+    chips.prepend(th); paint();
+  }
+  if (localStorage.getItem('ae3301:dark') === '1') document.body.classList.add('dark');
+  if (!document.querySelector('[data-amb]')) {
+    const w = document.createElement('div'); w.dataset.amb = '1'; w.style.cssText = 'position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden';
+    w.innerHTML = ['</>', '{ }', 'λ', '#', '▤', '⌘'].map((s, i) =>
+      '<span style="position:absolute;left:' + (6 + i * 16) + '%;top:' + (10 + (i % 3) * 28) + '%;font-family:var(--fm);font-size:' + (56 + i * 16) + 'px;color:var(--ink);opacity:.05;animation:amb ' + (26 + i * 6) + 's ease-in-out ' + (i * 2) + 's infinite alternate">' + s + '</span>').join('');
+    document.body.appendChild(w);
+  }
+})();
