@@ -368,3 +368,27 @@ if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 window.addEventListener('hashchange', go);
 go();
 onboarding();
+/* PY JUDGE ADD-ON: adds RUN PYTHON to every Arena card */
+(function () {
+  function enhance() {
+    document.querySelectorAll('[data-prob]').forEach(card => {
+      if (card.dataset.py) return; card.dataset.py = '1';
+      const ta = card.querySelector('.code-box'), con = card.querySelector('[data-con]');
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-ghost'; btn.textContent = '▶ RUN PYTHON';
+      btn.addEventListener('click', async () => {
+        con.textContent = '… running on Pad Python …';
+        try {
+          const r = await fetch('/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: ta.value }) });
+          if (!r.ok) throw 0;
+          const d = await r.json(); con.textContent = d.out || '(no output — use print())';
+        } catch (e) {
+          con.textContent = 'Python judge offline. Start the server with: python3 server.py';
+        }
+      });
+      card.querySelector('[data-run]').parentNode.insertBefore(btn, card.querySelector('[data-sub]'));
+    });
+  }
+  new MutationObserver(enhance).observe(document.getElementById('view'), { childList: true, subtree: true });
+  enhance();
+})();
