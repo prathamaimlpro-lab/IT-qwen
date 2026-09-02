@@ -172,3 +172,5 @@ export const ACHIEVEMENTS = [
 
 export const ACCENTS = ['#f0561c', '#1f8a34', '#6a4dc4', '#d4a24e', '#d44d8f'];
 Object.assign(LESSONS, LESSONS2); Object.assign(QUESTIONS, QUESTIONS2);
+import { LESSONS3, QUESTIONS3 } from './content3.js';   ← bring the new page in
+Object.assign(LESSONS, LESSONS3); Object.assign(QUESTIONS, QUESTIONS3);   ← glue it into the binder
