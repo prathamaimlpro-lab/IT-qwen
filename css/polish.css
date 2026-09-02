@@ -254,3 +254,25 @@ html{scroll-behavior:smooth}
 .ava-big{font-size:0;background:#161616 repeating-linear-gradient(0deg,transparent 0 6px,rgba(244,244,242,.05) 6px 7px)}
 .ava-big::after{content:"Æ";font-family:var(--fb);font-weight:800;font-size:3rem;color:#f4f4f2;display:grid;place-items:center;width:100%;height:100%}
 .code-box:focus{box-shadow:0 0 0 2px var(--acc)}
+/* v7 — dark mode + collapse + FAB + sheet + ambient */
+@keyframes amb{from{transform:translateY(-14px) rotate(-4deg)}to{transform:translateY(18px) rotate(5deg)}}
+body.sb-hidden .sidebar{display:none}
+body.sb-hidden .shell{grid-template-columns:1fr}
+body.sb-hidden main,body.sb-hidden .topbar{grid-column:1}
+#fab{position:fixed;right:18px;bottom:92px;z-index:95;width:56px;height:56px;border-radius:50%;background:var(--acc);color:#0d0d0d;font-size:26px;font-weight:800;border:1px solid #0d0d0d;box-shadow:0 10px 26px rgba(0,0,0,.35);cursor:pointer;transition:transform .25s}
+#fab:hover{transform:scale(1.08) rotate(90deg)}
+@media (min-width:1000px){#fab{bottom:24px}}
+.sheet{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:140;width:min(420px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px;animation:shUp .25s cubic-bezier(.2,.8,.3,1) both}
+@keyframes shUp{from{opacity:0;transform:translate(-50%,22px)}}
+.sheet button{display:flex;width:100%;align-items:center;gap:10px;padding:13px 14px;border-radius:12px;background:transparent;border:none;color:var(--ink);font-weight:700;cursor:pointer}
+.sheet button:hover{background:var(--panel2)}
+.sheet .danger{color:var(--red)}
+body.dark{--bg0:#0b0b0b;--bg1:#101010;--panel:#161616;--panel2:#1b1b1b;--panel3:#232323;--line:rgba(244,244,242,.14);--line2:rgba(244,244,242,.09);--ink:#f2f0ea;--dim:#b3aea7;--faint:#7d7871}
+body.dark .q-opt,body.dark .tier,body.dark .ach-chip,body.dark .steps li::before,body.dark .kicker,body.dark .q-feed.good{color:var(--ink)}
+body.dark .stat-num{color:var(--ink)!important}
+body.dark .st-xp .stat-num{color:var(--acc)!important}
+body.dark .btn-ghost{color:var(--ink);border-color:rgba(244,244,242,.35)}
+body.dark .card{background:linear-gradient(180deg,var(--panel),#121212)}
+body.dark .lesson-row{background:var(--panel)}
+body.dark .empty-note{color:var(--dim)}
+body.dark ::-webkit-scrollbar-thumb{background:#333;border-color:var(--bg0)}
