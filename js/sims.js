@@ -128,3 +128,26 @@ const REG = { pipeline, cpu, mem };
 export function initSims(root) {
   root.querySelectorAll('[data-sim]').forEach(h => { const f = REG[h.dataset.sim]; if (f) f(h); });
 }
+/* FILE EXPLORER SIM */
+function files(root) {
+  let nodes = { '/home': 'd', '/home/photos': 'd', '/home/photos/cat.jpg': 'f', '/home/photos/dog.jpg': 'f', '/home/music': 'd', '/home/music/song.mp3': 'f', '/home/notes.txt': 'f' };
+  let sel = '/home';
+  const q = s => root.querySelector(s);
+  root.innerHTML = '<div class="mem-grid"><div class="mem-box" style="text-align:left"><h5 style="color:var(--acc)">TREE</h5><div data-tree style="display:flex;flex-direction:column;gap:6px"></div></div><div class="mem-box"><h5 style="color:var(--gold)">INSPECTOR</h5><div class="cpu-status" data-path>/home</div><div class="cpu-status" data-kind>folder</div><div class="power-row"><button class="btn btn-ghost btn-sm" data-open>OPEN</button><button class="btn btn-ghost btn-sm" data-nf>+FILE</button><button class="btn btn-ghost btn-sm" data-nd>+FOLDER</button><button class="btn btn-danger btn-sm" data-del>DEL</button></div><p class="muted" data-cap style="margin-top:10px;font-size:.8rem">Tap items to select. Watch the path — that is the address.</p></div></div>';
+  function draw() {
+    q('[data-tree]').innerHTML = Object.keys(nodes).sort().map(k => {
+      const depth = k.split('/').length - 2;
+      const ic = nodes[k] === 'd' ? '📁' : (k.endsWith('.jpg') ? '🖼️' : k.endsWith('.mp3') ? '🎵' : '📄');
+      return '<button class="q-opt" style="padding:6px 10px;min-height:0;text-align:left" data-k="' + k + '">&nbsp;'.repeat(depth * 2) + ic + ' ' + k.split('/').pop() + '</button>';
+    }).join('');
+    root.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { sel = b.dataset.k; draw(); }));
+    q('[data-path]').textContent = sel;
+    q('[data-kind]').textContent = nodes[sel] === 'd' ? 'folder' : 'file (.' + sel.split('.').pop() + ')';
+  }
+  q('[data-open]').addEventListener('click', () => { q('[data-cap]').textContent = nodes[sel] === 'd' ? 'A folder opens into its children (see tree).' : 'Opening ' + sel + ' → the app for its extension launches.'; });
+  q('[data-nf]').addEventListener('click', () => { const n = prompt('New file name (with extension):', 'todo.txt'); if (n && n.trim()) { nodes[(sel === '/home' ? '/home' : sel) + '/' + n.trim()] = 'f'; draw(); } });
+  q('[data-nd]').addEventListener('click', () => { const n = prompt('New folder name:', 'projects'); if (n && n.trim()) { nodes[(sel === '/home' ? '/home' : sel) + '/' + n.trim()] = 'd'; draw(); } });
+  q('[data-del]').addEventListener('click', () => { Object.keys(nodes).forEach(k => { if (k === sel || k.startsWith(sel + '/')) delete nodes[k]; }); sel = '/home'; draw(); q('[data-cap]').textContent = 'Deleted — on real servers this is rm: no trash, no mercy.'; });
+  draw();
+}
+REG.files = files;
