@@ -1,15 +1,24 @@
-# AE3301 server v5: site + judge + accounts + admin questions + community (stdlib only)
-import http.server, socketserver, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time
+# AE3301 server v6: stable DB + comments + media uploads (stdlib only)
+import http.server, socketserver, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time, threading, base64
 PORT = 9999
-ADMIN_KEY = 'ae3301-admin'   # ← your secret
-DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ae3301.db')
-def db():
-    c = sqlite3.connect(DB); c.row_factory = sqlite3.Row
-    c.execute('create table if not exists users(id text primary key, name text unique, pw text, xp integer, lessons integer, accent text)')
-    c.execute('create table if not exists questions(id text primary key, topic text, tier text, q text, options text, answer integer, explain text, hint text)')
-    c.execute('create table if not exists posts(id text primary key, name text, text text, ts integer)')
-    c.execute('create table if not exists likes(post text, name text, unique(post, name))')
-    return c
+ADMIN_KEY = 'ae3301-admin'
+BASE = os.path.dirname(os.path.abspath(__file__))
+DB = os.path.join(BASE, 'ae3301.db')
+MEDIA = os.path.join(BASE, 'media')
+os.makedirs(MEDIA, exist_ok=True)
+CONN = sqlite3.connect(DB, check_same_thread=False, timeout=20)
+CONN.row_factory = sqlite3.Row
+LOCK = threading.Lock()
+with LOCK:
+    CONN.execute('create table if not exists users(id text primary key, name text unique, pw text, xp integer, lessons integer, accent text)')
+    CONN.execute('create table if not exists questions(id text primary key, topic text, tier text, q text, options text, answer integer, explain text, hint text)')
+    CONN.execute('create table if not exists posts(id text primary key, name text, text text, ts integer, media text)')
+    CONN.execute('create table if not exists likes(post text, name text, unique(post, name))')
+    CONN.execute('create table if not exists comments(id text primary key, post text, name text, text text, ts integer)')
+    try: CONN.execute('alter table posts add column media text')
+    except Exception: pass
+    CONN.commit()
+EXTS = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm'}
 class H(http.server.SimpleHTTPRequestHandler):
     def _json(self, obj, code=200):
         b = json.dumps(obj).encode()
@@ -21,16 +30,22 @@ class H(http.server.SimpleHTTPRequestHandler):
         n = int(self.headers.get('Content-Length', 0) or 0)
         try: return json.loads(self.rfile.read(n) or b'{}')
         except Exception: return {}
+    def _user(self, d):
+        return CONN.execute('select * from users where id=?', (d.get('token'),)).fetchone()
     def do_GET(self):
         if self.path == '/api/ping': self._json({'ok': True})
         elif self.path == '/api/board':
-            rows = db().execute('select name,xp,lessons from users order by xp desc limit 20').fetchall()
+            with LOCK: rows = CONN.execute('select name,xp,lessons from users order by xp desc limit 20').fetchall()
             self._json([dict(r) for r in rows])
         elif self.path == '/api/qlist':
-            rows = db().execute('select * from questions').fetchall()
+            with LOCK: rows = CONN.execute('select * from questions').fetchall()
             self._json([dict(r) for r in rows])
         elif self.path == '/api/posts':
-            rows = db().execute('select p.*, (select count(*) from likes l where l.post = p.id) as likes from posts p order by p.ts desc limit 50').fetchall()
+            with LOCK: rows = CONN.execute('select p.*, (select count(*) from likes l where l.post=p.id) likes, (select count(*) from comments c where c.post=p.id) cmts from posts p order by p.ts desc limit 50').fetchall()
+            self._json([dict(r) for r in rows])
+        elif self.path.startswith('/api/comments?post='):
+            pid = self.path.split('=')[-1]
+            with LOCK: rows = CONN.execute('select * from comments where post=? order by ts', (pid,)).fetchall()
             self._json([dict(r) for r in rows])
         else: super().do_GET()
     def do_POST(self):
@@ -49,53 +64,89 @@ class H(http.server.SimpleHTTPRequestHandler):
                     try: os.unlink(p)
                     except Exception: pass
             self._json({'out': out})
-        elif self.path == '/api/qcheck':
-            self._json({'ok': d.get('key') == ADMIN_KEY})
+        elif self.path == '/api/qcheck': self._json({'ok': d.get('key') == ADMIN_KEY})
         elif self.path in ('/api/register', '/api/login'):
             name = (d.get('name') or '').strip()[:24]; pw = d.get('pw') or ''
             if not name or not pw: return self._json({'err': 'name + password needed'}, 400)
-            h = hashlib.sha256(pw.encode()).hexdigest(); c = db()
-            if self.path.endswith('register'):
-                uid = uuid.uuid4().hex[:12]
-                try: c.execute('insert into users values(?,?,?,?,?,?)', (uid, name, h, 0, 0, '#f0561c'))
-                except sqlite3.IntegrityError: return self._json({'err': 'name taken'}, 409)
-            else:
-                row = c.execute('select id from users where name=? and pw=?', (name, h)).fetchone()
-                if not row: return self._json({'err': 'wrong name/password'}, 401)
-                uid = row['id']
-            c.commit(); self._json({'token': uid})
+            h = hashlib.sha256(pw.encode()).hexdigest()
+            with LOCK:
+                if self.path.endswith('register'):
+                    uid = uuid.uuid4().hex[:12]
+                    try: CONN.execute('insert into users values(?,?,?,?,?,?)', (uid, name, h, 0, 0, '#f0561c'))
+                    except sqlite3.IntegrityError: return self._json({'err': 'name taken'}, 409)
+                else:
+                    row = CONN.execute('select id from users where name=? and pw=?', (name, h)).fetchone()
+                    if not row: return self._json({'err': 'wrong name/password'}, 401)
+                    uid = row['id']
+                CONN.commit()
+            self._json({'token': uid})
         elif self.path == '/api/sync':
-            db().execute('update users set xp=?, lessons=?, accent=? where id=?',
-                         (int(d.get('xp', 0)), int(d.get('lessons', 0)), d.get('accent', '#f0561c'), d.get('token', '')))
-            db().commit(); self._json({'ok': True})
+            with LOCK:
+                CONN.execute('update users set xp=?,lessons=?,accent=? where id=?', (int(d.get('xp', 0)), int(d.get('lessons', 0)), d.get('accent', '#f0561c'), d.get('token', '')))
+                CONN.commit()
+            self._json({'ok': True})
         elif self.path == '/api/qadd':
             if d.get('key') != ADMIN_KEY: return self._json({'err': 'admin key required'}, 403)
             uid = uuid.uuid4().hex[:8]
-            db().execute('insert into questions values(?,?,?,?,?,?,?,?)',
-                         (uid, d.get('topic', ''), d.get('tier', 'concept'), d.get('q', ''), json.dumps(d.get('options', [])), 0, d.get('explain', ''), d.get('hint', '')))
-            db().commit(); self._json({'ok': True, 'id': uid})
+            with LOCK:
+                CONN.execute('insert into questions values(?,?,?,?,?,?,?,?)', (uid, d.get('topic', ''), d.get('tier', 'concept'), d.get('q', ''), json.dumps(d.get('options', [])), 0, d.get('explain', ''), d.get('hint', '')))
+                CONN.commit()
+            self._json({'ok': True, 'id': uid})
         elif self.path == '/api/qdel':
             if d.get('key') != ADMIN_KEY: return self._json({'err': 'admin key required'}, 403)
-            db().execute('delete from questions where id=?', (d.get('id'),))
-            db().commit(); self._json({'ok': True})
+            with LOCK:
+                CONN.execute('delete from questions where id=?', (d.get('id'),)); CONN.commit()
+            self._json({'ok': True})
         elif self.path == '/api/post':
-            c = db(); u = c.execute('select name from users where id=?', (d.get('token'),)).fetchone()
+            with LOCK: u = self._user(d)
             if not u: return self._json({'err': 'log in via SYNC first'}, 401)
             text = (d.get('text') or '').strip()[:500]
             if not text: return self._json({'err': 'empty post'}, 400)
-            c.execute('insert into posts values(?,?,?,?)', (uuid.uuid4().hex[:10], u['name'], text, int(time.time())))
-            c.commit(); self._json({'ok': True})
+            media = ''; m = d.get('media')
+            if isinstance(m, dict):
+                ext = (m.get('ext') or '').lower(); data = m.get('data') or ''
+                if ext in EXTS and len(data) < 9000000:
+                    mid = uuid.uuid4().hex[:10]
+                    try:
+                        open(os.path.join(MEDIA, mid + '.' + ext), 'wb').write(base64.b64decode(data))
+                        media = '/media/' + mid + '.' + ext
+                    except Exception: media = ''
+            with LOCK:
+                CONN.execute('insert into posts values(?,?,?,?,?)', (uuid.uuid4().hex[:10], u['name'], text, int(time.time()), media))
+                CONN.commit()
+            self._json({'ok': True})
+        elif self.path == '/api/delpost':
+            with LOCK:
+                u = self._user(d)
+                row = CONN.execute('select name from posts where id=?', (d.get('post'),)).fetchone()
+                if not u or (row and row['name'] != u['name'] and d.get('key') != ADMIN_KEY): return self._json({'err': 'not yours'}, 403)
+                CONN.execute('delete from posts where id=?', (d.get('post'),))
+                CONN.execute('delete from likes where post=?', (d.get('post'),))
+                CONN.execute('delete from comments where post=?', (d.get('post'),))
+                CONN.commit()
+            self._json({'ok': True})
         elif self.path == '/api/like':
-            c = db(); u = c.execute('select name from users where id=?', (d.get('token'),)).fetchone()
-            if not u: return self._json({'err': 'log in via SYNC first'}, 401)
-            cur = c.execute('insert or ignore into likes values(?,?)', (d.get('post'), u['name']))
-            if cur.rowcount:
-                row = c.execute('select name from posts where id=?', (d.get('post'),)).fetchone()
-                if row and row['name'] != u['name']:
-                    c.execute('update users set xp = xp + 2 where name=?', (row['name'],))
-            c.commit(); self._json({'ok': True})
+            with LOCK:
+                u = self._user(d)
+                if not u: return self._json({'err': 'log in first'}, 401)
+                cur = CONN.execute('insert or ignore into likes values(?,?)', (d.get('post'), u['name']))
+                if cur.rowcount:
+                    row = CONN.execute('select name from posts where id=?', (d.get('post'),)).fetchone()
+                    if row and row['name'] != u['name']:
+                        CONN.execute('update users set xp=xp+2 where name=?', (row['name'],))
+                CONN.commit()
+            self._json({'ok': True})
+        elif self.path == '/api/comment':
+            with LOCK: u = self._user(d)
+            if not u: return self._json({'err': 'log in first'}, 401)
+            text = (d.get('text') or '').strip()[:300]
+            if not text: return self._json({'err': 'empty comment'}, 400)
+            with LOCK:
+                CONN.execute('insert into comments values(?,?,?,?,?)', (uuid.uuid4().hex[:10], d.get('post'), u['name'], text, int(time.time())))
+                CONN.commit()
+            self._json({'ok': True})
         else: self.send_error(404)
 socketserver.TCPServer.allow_reuse_address = True
 with socketserver.TCPServer(('0.0.0.0', PORT), H) as s:
-    print('AE3301 v5 → http://localhost:%d (community online)' % PORT)
+    print('AE3301 v6 → http://localhost:%d (stable + comments + media)' % PORT)
     s.serve_forever()
