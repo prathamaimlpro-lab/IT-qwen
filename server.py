@@ -1,12 +1,14 @@
-# AE3301 server v4: site + judge + accounts + ADMIN-gated questions (stdlib only)
-import http.server, socketserver, json, subprocess, os, tempfile, sqlite3, hashlib, uuid
+# AE3301 server v5: site + judge + accounts + admin questions + community (stdlib only)
+import http.server, socketserver, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time
 PORT = 9999
-ADMIN_KEY = 'ae3301-admin'   # ← YOUR secret. Only this key can author questions.
+ADMIN_KEY = 'ae3301-admin'   # ← your secret
 DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ae3301.db')
 def db():
     c = sqlite3.connect(DB); c.row_factory = sqlite3.Row
     c.execute('create table if not exists users(id text primary key, name text unique, pw text, xp integer, lessons integer, accent text)')
     c.execute('create table if not exists questions(id text primary key, topic text, tier text, q text, options text, answer integer, explain text, hint text)')
+    c.execute('create table if not exists posts(id text primary key, name text, text text, ts integer)')
+    c.execute('create table if not exists likes(post text, name text, unique(post, name))')
     return c
 class H(http.server.SimpleHTTPRequestHandler):
     def _json(self, obj, code=200):
@@ -26,6 +28,9 @@ class H(http.server.SimpleHTTPRequestHandler):
             self._json([dict(r) for r in rows])
         elif self.path == '/api/qlist':
             rows = db().execute('select * from questions').fetchall()
+            self._json([dict(r) for r in rows])
+        elif self.path == '/api/posts':
+            rows = db().execute('select p.*, (select count(*) from likes l where l.post = p.id) as likes from posts p order by p.ts desc limit 50').fetchall()
             self._json([dict(r) for r in rows])
         else: super().do_GET()
     def do_POST(self):
@@ -73,8 +78,24 @@ class H(http.server.SimpleHTTPRequestHandler):
             if d.get('key') != ADMIN_KEY: return self._json({'err': 'admin key required'}, 403)
             db().execute('delete from questions where id=?', (d.get('id'),))
             db().commit(); self._json({'ok': True})
+        elif self.path == '/api/post':
+            c = db(); u = c.execute('select name from users where id=?', (d.get('token'),)).fetchone()
+            if not u: return self._json({'err': 'log in via SYNC first'}, 401)
+            text = (d.get('text') or '').strip()[:500]
+            if not text: return self._json({'err': 'empty post'}, 400)
+            c.execute('insert into posts values(?,?,?,?)', (uuid.uuid4().hex[:10], u['name'], text, int(time.time())))
+            c.commit(); self._json({'ok': True})
+        elif self.path == '/api/like':
+            c = db(); u = c.execute('select name from users where id=?', (d.get('token'),)).fetchone()
+            if not u: return self._json({'err': 'log in via SYNC first'}, 401)
+            cur = c.execute('insert or ignore into likes values(?,?)', (d.get('post'), u['name']))
+            if cur.rowcount:
+                row = c.execute('select name from posts where id=?', (d.get('post'),)).fetchone()
+                if row and row['name'] != u['name']:
+                    c.execute('update users set xp = xp + 2 where name=?', (row['name'],))
+            c.commit(); self._json({'ok': True})
         else: self.send_error(404)
 socketserver.TCPServer.allow_reuse_address = True
 with socketserver.TCPServer(('0.0.0.0', PORT), H) as s:
-    print('AE3301 v4 → http://localhost:%d (admin-gated authoring)' % PORT)
+    print('AE3301 v5 → http://localhost:%d (community online)' % PORT)
     s.serve_forever()
