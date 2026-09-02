@@ -1,6 +1,7 @@
-# AE3301 server v3: static + judge + accounts + admin questions (stdlib only)
+# AE3301 server v4: site + judge + accounts + ADMIN-gated questions (stdlib only)
 import http.server, socketserver, json, subprocess, os, tempfile, sqlite3, hashlib, uuid
 PORT = 9999
+ADMIN_KEY = 'ae3301-admin'   # ← YOUR secret. Only this key can author questions.
 DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ae3301.db')
 def db():
     c = sqlite3.connect(DB); c.row_factory = sqlite3.Row
@@ -28,8 +29,9 @@ class H(http.server.SimpleHTTPRequestHandler):
             self._json([dict(r) for r in rows])
         else: super().do_GET()
     def do_POST(self):
+        d = self._body()
         if self.path == '/run':
-            d = self._body(); p = None
+            p = None
             try:
                 with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as f:
                     f.write(d.get('code', '')); p = f.name
@@ -42,8 +44,10 @@ class H(http.server.SimpleHTTPRequestHandler):
                     try: os.unlink(p)
                     except Exception: pass
             self._json({'out': out})
+        elif self.path == '/api/qcheck':
+            self._json({'ok': d.get('key') == ADMIN_KEY})
         elif self.path in ('/api/register', '/api/login'):
-            d = self._body(); name = (d.get('name') or '').strip()[:24]; pw = d.get('pw') or ''
+            name = (d.get('name') or '').strip()[:24]; pw = d.get('pw') or ''
             if not name or not pw: return self._json({'err': 'name + password needed'}, 400)
             h = hashlib.sha256(pw.encode()).hexdigest(); c = db()
             if self.path.endswith('register'):
@@ -56,20 +60,21 @@ class H(http.server.SimpleHTTPRequestHandler):
                 uid = row['id']
             c.commit(); self._json({'token': uid})
         elif self.path == '/api/sync':
-            d = self._body()
             db().execute('update users set xp=?, lessons=?, accent=? where id=?',
                          (int(d.get('xp', 0)), int(d.get('lessons', 0)), d.get('accent', '#f0561c'), d.get('token', '')))
             db().commit(); self._json({'ok': True})
         elif self.path == '/api/qadd':
-            d = self._body(); uid = uuid.uuid4().hex[:8]
+            if d.get('key') != ADMIN_KEY: return self._json({'err': 'admin key required'}, 403)
+            uid = uuid.uuid4().hex[:8]
             db().execute('insert into questions values(?,?,?,?,?,?,?,?)',
                          (uid, d.get('topic', ''), d.get('tier', 'concept'), d.get('q', ''), json.dumps(d.get('options', [])), 0, d.get('explain', ''), d.get('hint', '')))
             db().commit(); self._json({'ok': True, 'id': uid})
         elif self.path == '/api/qdel':
-            db().execute('delete from questions where id=?', (self._body().get('id'),))
+            if d.get('key') != ADMIN_KEY: return self._json({'err': 'admin key required'}, 403)
+            db().execute('delete from questions where id=?', (d.get('id'),))
             db().commit(); self._json({'ok': True})
         else: self.send_error(404)
 socketserver.TCPServer.allow_reuse_address = True
 with socketserver.TCPServer(('0.0.0.0', PORT), H) as s:
-    print('AE3301 v3 → http://localhost:%d (site + judge + network + admin)' % PORT)
+    print('AE3301 v4 → http://localhost:%d (admin-gated authoring)' % PORT)
     s.serve_forever()
