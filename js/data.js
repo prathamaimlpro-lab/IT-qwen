@@ -168,4 +168,5 @@ export const ACHIEVEMENTS = [
   { id: 'stylist',    title: 'STYLIST',       desc: 'Customize your profile.', icon: 'star' }
 ];
 
-export const ACCENTS = ['#38e1ff', '#8b7bff', '#3ddc97', '#ffc861', '#ff7ab8'];
+
+export const ACCENTS = ['#f0561c', '#1f8a34', '#6a4dc4', '#d4a24e', '#d44d8f'];
