@@ -1,10 +1,11 @@
-# AE3301 server v2: static + Python judge + accounts/leaderboard (stdlib only)
+# AE3301 server v3: static + judge + accounts + admin questions (stdlib only)
 import http.server, socketserver, json, subprocess, os, tempfile, sqlite3, hashlib, uuid
 PORT = 9999
 DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ae3301.db')
 def db():
     c = sqlite3.connect(DB); c.row_factory = sqlite3.Row
     c.execute('create table if not exists users(id text primary key, name text unique, pw text, xp integer, lessons integer, accent text)')
+    c.execute('create table if not exists questions(id text primary key, topic text, tier text, q text, options text, answer integer, explain text, hint text)')
     return c
 class H(http.server.SimpleHTTPRequestHandler):
     def _json(self, obj, code=200):
@@ -21,6 +22,9 @@ class H(http.server.SimpleHTTPRequestHandler):
         if self.path == '/api/ping': self._json({'ok': True})
         elif self.path == '/api/board':
             rows = db().execute('select name,xp,lessons from users order by xp desc limit 20').fetchall()
+            self._json([dict(r) for r in rows])
+        elif self.path == '/api/qlist':
+            rows = db().execute('select * from questions').fetchall()
             self._json([dict(r) for r in rows])
         else: super().do_GET()
     def do_POST(self):
@@ -56,8 +60,16 @@ class H(http.server.SimpleHTTPRequestHandler):
             db().execute('update users set xp=?, lessons=?, accent=? where id=?',
                          (int(d.get('xp', 0)), int(d.get('lessons', 0)), d.get('accent', '#f0561c'), d.get('token', '')))
             db().commit(); self._json({'ok': True})
+        elif self.path == '/api/qadd':
+            d = self._body(); uid = uuid.uuid4().hex[:8]
+            db().execute('insert into questions values(?,?,?,?,?,?,?,?)',
+                         (uid, d.get('topic', ''), d.get('tier', 'concept'), d.get('q', ''), json.dumps(d.get('options', [])), 0, d.get('explain', ''), d.get('hint', '')))
+            db().commit(); self._json({'ok': True, 'id': uid})
+        elif self.path == '/api/qdel':
+            db().execute('delete from questions where id=?', (self._body().get('id'),))
+            db().commit(); self._json({'ok': True})
         else: self.send_error(404)
 socketserver.TCPServer.allow_reuse_address = True
 with socketserver.TCPServer(('0.0.0.0', PORT), H) as s:
-    print('AE3301 v2 → http://localhost:%d (site + judge + network)' % PORT)
+    print('AE3301 v3 → http://localhost:%d (site + judge + network + admin)' % PORT)
     s.serve_forever()
