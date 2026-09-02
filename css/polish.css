@@ -122,3 +122,23 @@ h1,h2,h3,h4{font-family:var(--fd);font-weight:700;letter-spacing:-.02em}
 ::-webkit-scrollbar-thumb{background:#333;border-color:var(--bg0)}
 ::selection{background:rgba(217,119,87,.28)}
 main::after{color:var(--faint)}
+/* v3 — CLEAN NEUTRAL: flat grays, white text, Inter only (Claude app feel) */
+:root{--bg0:#121212;--bg1:#151515;--panel:#1b1b1b;--panel2:#202020;--panel3:#262626;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.05);--ink:#ececec;--dim:#a6a6a6;--faint:#757575;--fd:'Inter',system-ui,sans-serif;--fb:'Inter',system-ui,sans-serif;--acc:#d97757;--gold:#d4a24e;--green:#74b98e;--red:#d47c7c;--flame:#d98d5f;--blue:#8aa5c4;--violet:#a79dc0;--pink:#c393a6}
+body{background:var(--bg0)}
+body::before{background:linear-gradient(180deg,#141414,#101010)}
+body::after{display:none}
+#app::before,#app::after{display:none}
+h1,h2,h3,h4{font-family:var(--fd);font-weight:700;letter-spacing:-.02em}
+.page-head h1{font-size:clamp(1.9rem,3.4vw,2.7rem);letter-spacing:-.03em}
+.btn{font-family:var(--fb);letter-spacing:0}
+.kicker{font-family:var(--fb);font-weight:600}
+.logo-text::before{color:var(--ink)}
+.topbar{background:rgba(18,18,18,.86)}
+.chip{background:rgba(255,255,255,.05)}
+.card{background:linear-gradient(180deg,var(--panel),#181818)}
+.code-box{background:#161616}
+.console{background:#101010}
+.avatar-btn,.ava-big{background:#232323}
+::-webkit-scrollbar-thumb{background:#333;border-color:var(--bg0)}
+::selection{background:rgba(217,119,87,.28)}
+main::after{color:var(--faint)}
