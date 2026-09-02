@@ -183,3 +183,188 @@ function mountLesson(root, id) {
   }
   start.addEventListener('click', () => { start.disabled = true; startGate(root.querySelector('[data-gatebody]')); });
 }
+/* (B) practice + arena + profile + router + boot */
+function renderPractice(topic) {
+  if (!QUESTIONS[topic]) return '<p class="empty-note">No questions for this topic yet.</p>';
+  return `
+  <a class="back-link" href="#/home">${icon('arrow-left')} Home</a>
+  <div class="page-head"><div class="kicker">${icon('target')} PRACTICE</div><h1>${escapeHtml(S.topicLabel(topic))}</h1>
+  <p class="muted">First correct answer earns XP: concept +${XP.easy}, apply +${XP.medium}, industrial +${XP.hard}.</p></div>
+  <div data-qs>${questionsHtml(topic)}</div>`;
+}
+function mountPractice(root, topic) { bindQuestions(root, topic); }
+
+function makeJudge() {
+  const src = `self.onmessage=function(e){var d=e.data;try{var f=new Function(d.code+';return '+d.fn+';')();var out=d.cases.map(function(c){var got;try{got=f.apply(null,c[0]);}catch(err){got='ERROR: '+err.message;}return{got:got,exp:c[1],pass:JSON.stringify(got)===JSON.stringify(c[1])};});self.postMessage({ok:true,out:out});}catch(err){self.postMessage({ok:false,err:err.message});}};`;
+  return new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+}
+function renderArena() {
+  const s = S.getState();
+  return `
+  <div class="page-head"><div class="kicker">${icon('code')} CODING ARENA</div><h1>Write real code. A real judge tests it.</h1>
+  <p class="muted">Code runs in a sealed, timed box. RUN = sample cases, SUBMIT = hidden tests. +${XP.arena} XP per solve.</p></div>
+  ${ARENA.map(p => {
+    const solved = s.solvedArena.includes(p.id);
+    return `<section class="card" data-prob="${p.id}" style="margin-bottom:18px">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+        <span class="tier ${p.tier}">${p.tier.toUpperCase()}</span><h3>${escapeHtml(p.title)}</h3>
+        ${solved ? '<span class="status-badge b-done" style="margin-left:auto">' + icon('check') + 'Solved</span>' : ''}
+      </div>
+      <p class="muted" style="margin-bottom:12px">${escapeHtml(p.prompt)}</p>
+      <textarea class="code-box" spellcheck="false">${escapeHtml(s.codes[p.id] ?? p.starter)}</textarea>
+      <div class="cp-actions" style="justify-content:flex-start"><button class="btn btn-ghost" data-run>${icon('play')} RUN</button><button class="btn btn-primary" data-sub>${icon('check')} SUBMIT</button></div>
+      <div class="console" data-con>— console —</div>
+      <div data-tests></div>
+    </section>`;
+  }).join('')}`;
+}
+function mountArena(root) {
+  root.querySelectorAll('[data-prob]').forEach(card => {
+    const p = ARENA.find(x => x.id === card.dataset.prob);
+    const ta = card.querySelector('.code-box'), con = card.querySelector('[data-con]'), tests = card.querySelector('[data-tests]');
+    ta.addEventListener('input', () => S.setCode(p.id, ta.value));
+    function runJudge(cases, onSubmit) {
+      const w = makeJudge(); let done = false;
+      const kill = setTimeout(() => { if (!done) { done = true; w.terminate(); con.textContent = '⏱ timed out — infinite loop?'; } }, 2500);
+      w.onmessage = e => {
+        if (done) return; done = true; clearTimeout(kill); w.terminate();
+        if (!e.data.ok) { con.textContent = '✗ ' + e.data.err; tests.innerHTML = ''; return; }
+        con.textContent = e.data.out.map(r => '→ got ' + JSON.stringify(r.got) + ' · expected ' + JSON.stringify(r.exp) + ' ' + (r.pass ? '✓' : '✗')).join('\n');
+        tests.innerHTML = e.data.out.map((r, i) => `<div class="test-row ${r.pass ? 'pass' : 'fail'}">${icon(r.pass ? 'check' : 'x')} test ${i + 1}: ${r.pass ? 'passed' : 'failed'}</div>`).join('');
+        if (onSubmit && e.data.out.every(r => r.pass)) {
+          const res = S.solveArena(p.id);
+          if (!res.duplicate) { celebrate(res, card.querySelector('[data-sub]')); toast('success', 'Arena solved: ' + p.title, '+' + XP.arena + ' XP'); }
+        }
+      };
+      w.postMessage({ code: ta.value, fn: p.fn, cases });
+    }
+    card.querySelector('[data-run]').addEventListener('click', () => runJudge(p.show, false));
+    card.querySelector('[data-sub]').addEventListener('click', () => runJudge(p.show.concat(p.hidden), true));
+  });
+}
+
+function renderProfile() {
+  const s = S.getState(), li = levelInfo(s.xp);
+  return `
+  <div class="page-head"><div class="kicker">${icon('user')} PROFILE</div><h1>Your explorer identity</h1></div>
+  <section class="card profile-head" style="margin-bottom:18px">
+    <div class="ava-big" style="border-color:${s.accent}">${li.avatar}</div>
+    <div style="flex:1;min-width:220px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <h2 data-name>${escapeHtml(s.name)}</h2>
+        <button class="btn btn-ghost btn-sm" data-editname>${icon('edit')} EDIT</button>
+      </div>
+      <div data-editrow hidden style="margin-top:10px"><input class="code-box" style="min-height:48px;width:min(240px,100%)" maxlength="24" value="${escapeHtml(s.name)}" data-namein /><button class="btn btn-primary btn-sm" data-savename>SAVE</button></div>
+      <p class="muted" style="margin-top:6px">LV ${li.level} · ${escapeHtml(li.title)} · ${s.xp} XP · streak ${s.streak.count}</p>
+      <div style="margin-top:8px">${progressBar(li.pct, { gold: true })}</div>
+    </div>
+  </section>
+  <section class="card" style="margin-bottom:18px">
+    <div class="kicker">${icon('star')} CUSTOMIZE</div>
+    <p class="muted" style="margin:8px 0 12px">Avatar evolves with level. Pick your accent:</p>
+    <div class="swatches">${ACCENTS.map(c => `<button class="swatch ${c === s.accent ? 'sel' : ''}" data-acc="${c}" style="background:${c}" aria-label="accent"></button>`).join('')}</div>
+  </section>
+  <section class="card" style="margin-bottom:18px">
+    <div class="kicker">${icon('trophy')} ACHIEVEMENT SHOWCASE (pick up to 3)</div>
+    <div class="slots" style="margin-top:12px">${[0, 1, 2].map(i => {
+      const a = ACHIEVEMENTS.find(x => x.id === s.showcase[i]);
+      return `<div class="slot ${a ? 'filled' : ''}">${a ? icon(a.icon) : '+'}</div>`;
+    }).join('')}</div>
+    <div class="ach-pick">${ACHIEVEMENTS.map(a => {
+      const got = s.achievements.some(x => x.id === a.id);
+      if (!got) return `<span class="ach-chip" style="opacity:.45">${icon('lock')} ${escapeHtml(a.title)}</span>`;
+      return `<button class="ach-chip ${s.showcase.includes(a.id) ? 'on' : ''}" data-show="${a.id}">${icon(a.icon)} ${escapeHtml(a.title)}</button>`;
+    }).join('')}</div>
+  </section>
+  <section class="card">
+    <div class="kicker" style="color:var(--red)">${icon('alert')} DANGER ZONE</div>
+    <p class="muted" style="margin:8px 0 12px">Wipe XP, lessons, mastery, achievements. Cannot be undone.</p>
+    <button class="btn btn-danger" data-reset>${icon('refresh')} RESET ALL PROGRESS</button>
+  </section>`;
+}
+function mountProfile(root) {
+  root.querySelector('[data-editname]').addEventListener('click', () => { root.querySelector('[data-editrow]').hidden = false; });
+  root.querySelector('[data-savename]').addEventListener('click', () => {
+    S.setName(root.querySelector('[data-namein]').value);
+    root.querySelector('[data-name]').textContent = S.getState().name;
+    root.querySelector('[data-editrow]').hidden = true;
+  });
+  root.querySelectorAll('[data-acc]').forEach(b => b.addEventListener('click', () => {
+    const r = S.setAccent(b.dataset.acc);
+    document.documentElement.style.setProperty('--acc', b.dataset.acc);
+    root.querySelectorAll('[data-acc]').forEach(o => o.classList.toggle('sel', o === b));
+    root.querySelector('.ava-big').style.borderColor = b.dataset.acc;
+    celebrate(r, b);
+  }));
+  root.querySelectorAll('[data-show]').forEach(b => b.addEventListener('click', () => {
+    const r = S.toggleShowcase(b.dataset.show);
+    if (r && r.full) { toast('info', 'Showcase full', 'Max 3 on display.'); return; }
+    celebrate(r || { gained: 0, achievements: [], leveledUp: false }, b);
+    const view = document.getElementById('view'); view.innerHTML = renderProfile(); mountProfile(view);
+  }));
+  root.querySelector('[data-reset]').addEventListener('click', async () => {
+    await openOverlay('<h3>Reset everything?</h3><p class="muted">All progress will be permanently wiped.</p><div class="cp-actions"><button class="btn btn-ghost" data-close>KEEP</button><button class="btn btn-danger" data-yes>YES, RESET</button></div>');
+  });
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-yes]')) S.resetAll(); });
+}
+
+const ROUTES = [
+  { re: /^\/?$/, n: 'home' }, { re: /^\/home$/, n: 'home' },
+  { re: /^\/learn$/, n: 'learn' }, { re: /^\/level\/([\w-]+)$/, n: 'level' },
+  { re: /^\/lesson\/([\w-]+)$/, n: 'lesson' }, { re: /^\/practice\/([\w-]+)$/, n: 'practice' },
+  { re: /^\/arena$/, n: 'arena' }, { re: /^\/profile$/, n: 'profile' }
+];
+const PAGES = {
+  home: { r: renderHome, m: null, t: 'Home' },
+  learn: { r: renderLearn, m: mountLearn, t: 'Learn' },
+  level: { r: renderLevel, m: mountLevel, t: 'Level' },
+  lesson: { r: renderLesson, m: mountLesson, t: 'Lesson' },
+  practice: { r: renderPractice, m: mountPractice, t: 'Practice' },
+  arena: { r: renderArena, m: mountArena, t: 'Arena' },
+  profile: { r: renderProfile, m: mountProfile, t: 'Profile' }
+};
+function go() {
+  const h = (location.hash || '#/').slice(1);
+  let name = 'home', params = [];
+  for (const r of ROUTES) { const m = h.match(r.re); if (m) { name = r.n; params = m.slice(1); break; } }
+  const p = PAGES[name] || PAGES.home;
+  const view = document.getElementById('view');
+  view.innerHTML = p.r(...params);
+  view.classList.remove('page'); void view.offsetWidth; view.classList.add('page');
+  if (p.m) p.m(view, ...params);
+  scanReveals(view);
+  setActiveNav(name);
+  document.title = p.t + ' · IT QUEST';
+  window.scrollTo(0, 0);
+}
+function onboarding() {
+  if (localStorage.getItem('itq2:ob')) return;
+  let acc = ACCENTS[0];
+  openOverlay(`
+    <h3 style="margin-top:0">Create your explorer</h3>
+    <p class="muted">Local identity — no account needed.</p>
+    <input class="code-box" style="min-height:52px;width:100%;text-align:center" id="obn" maxlength="24" placeholder="Your name, explorer…" />
+    <div class="swatches" style="justify-content:center;margin:16px 0">${ACCENTS.map((c, i) => `<button class="swatch ${i === 0 ? 'sel' : ''}" data-ob="${c}" style="background:${c}"></button>`).join('')}</div>
+    <button class="btn btn-primary btn-lg btn-block" data-close data-obstart>${icon('bolt')} BEGIN THE QUEST</button>
+  `);
+  document.addEventListener('click', function h(e) {
+    const sw = e.target.closest('[data-ob]');
+    if (sw) { acc = sw.dataset.ob; document.querySelectorAll('[data-ob]').forEach(o => o.classList.toggle('sel', o === sw)); }
+    if (e.target.closest('[data-obstart]')) {
+      document.removeEventListener('click', h);
+      S.setName((document.getElementById('obn') || {}).value || 'Explorer');
+      S.setAccent(acc);
+      document.documentElement.style.setProperty('--acc', acc);
+      localStorage.setItem('itq2:ob', '1');
+      go();
+    }
+  });
+}
+buildShell(document.getElementById('app'));
+initShellUpdates();
+setupReveal();
+document.documentElement.style.setProperty('--acc', S.getState().accent);
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+window.addEventListener('hashchange', go);
+go();
+onboarding();
