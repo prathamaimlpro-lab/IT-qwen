@@ -177,3 +177,4 @@ export function overallPct() {
   const done = all.filter(ls => state.completedLessons.includes(ls.id)).length;
   return all.length ? Math.round(done / all.length * 100) : 0;
 }
+export { levelInfo };
