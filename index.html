@@ -27,6 +27,9 @@ window.addEventListener('error', function (e) {
 <script>
 setInterval(function(){ if(document.title.indexOf('IT QUEST')>-1){ document.title=document.title.replace('IT QUEST','AE3301'); } },400);
 </script>
+<script>
+try{var k='itq2:save',d=JSON.parse(localStorage.getItem(k)||'null');if(d&&d.s&&d.s.accent==='#38e1ff'){d.s.accent='#f0561c';localStorage.setItem(k,JSON.stringify(d));}}catch(e){}
+</script>
 <script type="module" src="js/pages.js"></script>
 </body>
 </html>
