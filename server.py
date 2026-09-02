@@ -1,4 +1,4 @@
-# AE3301 server v6: stable DB + comments + media uploads (stdlib only)
+# AE3301 server v7: stable DB + comments + media + views (stdlib only)
 import http.server, socketserver, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time, threading, base64
 PORT = 9999
 ADMIN_KEY = 'ae3301-admin'
@@ -12,11 +12,12 @@ LOCK = threading.Lock()
 with LOCK:
     CONN.execute('create table if not exists users(id text primary key, name text unique, pw text, xp integer, lessons integer, accent text)')
     CONN.execute('create table if not exists questions(id text primary key, topic text, tier text, q text, options text, answer integer, explain text, hint text)')
-    CONN.execute('create table if not exists posts(id text primary key, name text, text text, ts integer, media text)')
+    CONN.execute('create table if not exists posts(id text primary key, name text, text text, ts integer, media text, views integer default 0)')
     CONN.execute('create table if not exists likes(post text, name text, unique(post, name))')
     CONN.execute('create table if not exists comments(id text primary key, post text, name text, text text, ts integer)')
-    try: CONN.execute('alter table posts add column media text')
-    except Exception: pass
+    for stmt in ('alter table posts add column media text', 'alter table posts add column views integer default 0'):
+        try: CONN.execute(stmt)
+        except Exception: pass
     CONN.commit()
 EXTS = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm'}
 class H(http.server.SimpleHTTPRequestHandler):
@@ -65,6 +66,12 @@ class H(http.server.SimpleHTTPRequestHandler):
                     except Exception: pass
             self._json({'out': out})
         elif self.path == '/api/qcheck': self._json({'ok': d.get('key') == ADMIN_KEY})
+        elif self.path == '/api/seen':
+            with LOCK:
+                for i in (d.get('ids') or [])[:60]:
+                    CONN.execute('update posts set views=views+1 where id=?', (i,))
+                CONN.commit()
+            self._json({'ok': True})
         elif self.path in ('/api/register', '/api/login'):
             name = (d.get('name') or '').strip()[:24]; pw = d.get('pw') or ''
             if not name or not pw: return self._json({'err': 'name + password needed'}, 400)
@@ -112,7 +119,7 @@ class H(http.server.SimpleHTTPRequestHandler):
                         media = '/media/' + mid + '.' + ext
                     except Exception: media = ''
             with LOCK:
-                CONN.execute('insert into posts values(?,?,?,?,?)', (uuid.uuid4().hex[:10], u['name'], text, int(time.time()), media))
+                CONN.execute('insert into posts values(?,?,?,?,?,0)', (uuid.uuid4().hex[:10], u['name'], text, int(time.time()), media))
                 CONN.commit()
             self._json({'ok': True})
         elif self.path == '/api/delpost':
@@ -148,5 +155,5 @@ class H(http.server.SimpleHTTPRequestHandler):
         else: self.send_error(404)
 socketserver.TCPServer.allow_reuse_address = True
 with socketserver.TCPServer(('0.0.0.0', PORT), H) as s:
-    print('AE3301 v6 → http://localhost:%d (stable + comments + media)' % PORT)
+    print('AE3301 v7 → http://localhost:%d' % PORT)
     s.serve_forever()
