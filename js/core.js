@@ -178,3 +178,14 @@ export function overallPct() {
   return all.length ? Math.round(done / all.length * 100) : 0;
 }
 export { levelInfo };
+/* ================================================================
+ * MISSION SUPPORT — grant XP through the full pipeline
+ * (streak + level-up + achievements all fire correctly)
+ * ================================================================ */
+export function grantXp(n) {
+  const before = state.xp;
+  addXp(n);
+  const r = result(before);
+  commit();
+  return r;
+}
