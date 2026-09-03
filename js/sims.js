@@ -202,3 +202,98 @@ function sched(root) {
   draw();
 }
 REG.sched = sched;
+/* ================================================================
+ * TERMINAL SIM (§14) — safe in-browser Linux shell with tutor notes
+ * ================================================================ */
+function term(root) {
+  const mk = (d, f) => ({ d: d || {}, f: f || {} });
+  let fs, cwd;
+  function reset() {
+    fs = mk({
+      home: mk({ me: mk(
+        { docs: mk({}, { 'notes.txt': 'AE3301 terminal — practice makes permanent.' }) },
+        { 'todo.txt': '1. learn the terminal\n2. build things\n3. teach others' }) }, {}),
+      etc: mk({}, { 'conf.cfg': 'mode=learn\nlevel=0' })
+    }, {});
+    cwd = ['home', 'me'];
+  }
+  reset();
+  const q = s => root.querySelector(s);
+  const cur = () => { let n = fs; for (const p of cwd) n = n.d[p]; return n; };
+  const at = parts => { let n = fs; for (const p of parts) { if (!n.d[p]) return null; n = n.d[p]; } return n; };
+  const resolve = arg => {
+    if (!arg || arg === '~') return ['home', 'me'];
+    const parts = arg.startsWith('/') ? arg.split('/').filter(Boolean) : cwd.concat(arg.split('/').filter(Boolean));
+    const out = [];
+    parts.forEach(p => { if (p === '..') out.pop(); else if (p !== '.') out.push(p); });
+    return out;
+  };
+  const pathStr = () => '/' + cwd.join('/');
+  const NOTES = {
+    pwd: 'pwd = print working directory — where you stand.',
+    ls: 'ls lists the children of a folder (folders get a /).',
+    cd: 'cd changes folder; cd .. climbs one level up.',
+    mkdir: 'mkdir makes a new folder.',
+    touch: 'touch creates an empty file.',
+    cat: 'cat prints a file’s contents.',
+    rm: 'rm deletes — Linux has NO trash bin. Careful.',
+    cp: 'cp copies a file. mv moves/renames it.',
+    grep: 'grep prints only the lines containing your word.',
+    help: 'These are the real commands engineers use daily.'
+  };
+  function run(line) {
+    const parts = line.trim().split(/\s+/);
+    const cmd = parts[0], args = parts.slice(1), a = args.join(' ');
+    switch (cmd) {
+      case '': return { out: '' };
+      case 'help': return { out: 'commands: pwd ls cd mkdir touch cat rm cp mv grep clear help' };
+      case 'clear': return { clear: true };
+      case 'pwd': return { out: pathStr() };
+      case 'ls': {
+        const n = a ? at(resolve(a)) : cur();
+        if (!n) return { out: 'ls: cannot access ' + a + ': No such folder' };
+        return { out: Object.keys(n.d).map(x => x + '/').concat(Object.keys(n.f)).join('   ') || '(empty)' };
+      }
+      case 'cd': {
+        const p = resolve(a);
+        if (!at(p)) return { out: 'cd: no such folder: ' + a };
+        cwd = p; return { out: '' };
+      }
+      case 'mkdir': if (!a) return { out: 'mkdir: give a name' }; cur().d[a] = mk(); return { out: '' };
+      case 'touch': if (!a) return { out: 'touch: give a name' }; const n0 = cur(); n0.f[a] = n0.f[a] || ''; return { out: '' };
+      case 'cat': return cur().f[a] != null ? { out: cur().f[a] } : { out: 'cat: ' + a + ': No such file' };
+      case 'rm': { const n = cur(); if (n.f[a] != null) delete n.f[a]; else if (n.d[a]) delete n.d[a]; else return { out: 'rm: ' + a + ': No such file' }; return { out: '' }; }
+      case 'cp': { const s = args[0], d = args[1]; const n = cur(); if (n.f[s] == null) return { out: 'cp: ' + s + ': No such file' }; n.f[d] = n.f[s]; return { out: '' }; }
+      case 'mv': { const s = args[0], d = args[1]; const n = cur(); if (n.f[s] == null) return { out: 'mv: ' + s + ': No such file' }; n.f[d] = n.f[s]; delete n.f[s]; return { out: '' }; }
+      case 'grep': { const w = args[0], f = args[1]; const n = cur(); if (n.f[f] == null) return { out: 'grep: ' + f + ': No such file' }; return { out: n.f[f].split('\n').filter(l => l.includes(w)).join('\n') || '(no matches)' }; }
+      default: return { out: 'command not found: ' + cmd + '  (try help)' };
+    }
+  }
+  root.innerHTML =
+    '<div class="code-box" data-screen style="min-height:260px;max-height:340px;overflow:auto;white-space:pre-wrap"></div>' +
+    '<div style="display:flex;gap:8px;margin-top:8px;align-items:center">' +
+    '<span class="mono" style="color:var(--acc);white-space:nowrap">me@ae3301:<span data-ps></span>$</span>' +
+    '<input class="code-box" data-in style="flex:1;min-height:44px" placeholder="type a command… (help)" autocapitalize="off" autocorrect="off" spellcheck="false"></div>';
+  const screen = q('[data-screen]'), inp = q('[data-in]');
+  function print(t, style) {
+    const d = document.createElement('div');
+    if (style) d.style.cssText = style;
+    d.textContent = t;
+    screen.appendChild(d);
+    screen.scrollTop = screen.scrollHeight;
+  }
+  print('AE3301 learning terminal — type `help` and press Enter.', 'color:var(--dim)');
+  q('[data-ps]').textContent = pathStr();
+  inp.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const line = inp.value; inp.value = '';
+    print('me@ae3301:' + pathStr() + '$ ' + line, 'color:var(--acc)');
+    const r = run(line);
+    if (r.clear) { screen.innerHTML = ''; return; }
+    if (r.out) print(r.out);
+    const c = line.trim().split(/\s+/)[0];
+    if (NOTES[c]) print('· ' + NOTES[c], 'color:var(--faint);font-size:.78rem');
+    q('[data-ps]').textContent = pathStr();
+  });
+}
+REG.term = term;
