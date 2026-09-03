@@ -1,21 +1,22 @@
 /**
  * ================================================================
- *  AE3301 · FIX LAYER v3 · single-file, self-contained
+ *  AE3301 · FIX LAYER v4 · single-file, self-contained
  * ----------------------------------------------------------------
- *  0 · Injects critical CSS: kills expensive blur/clip animations
- *      (scroll/transition smoothness on low-power tablets),
- *      hides the inline composer (X uses a compose sheet),
- *      caps post media, styles menus & sheet.
- *  1 · FAB (+) → Community only → opens X-style compose sheet.
- *  2 · ⋯ menu with VERIFIED delete (errors shown, never silent).
- *  3 · Media capping for present + future posts.
+ *  LAYOUT  · sidebar fixed full-height (no white gap below)
+ *          · main content fills the display (no dead right column)
+ *  PERF    · ambient watermark frozen (animated fixed layers were
+ *            causing scroll shutter on the Pad's GPU)
+ *          · page-change blur/clip animations disabled
+ *  SOCIAL  · X-style compose sheet via FAB (Community only)
+ *          · ⋯ menu with verified, non-silent delete
+ *          · post media capped at 420px (X-style crop)
  * ================================================================
  */
 (() => {
   'use strict';
   const TK = 'ae3301:token';
 
-  /* ---------- 0 · critical CSS ---------- */
+  /* ---------- injected critical CSS ---------- */
   document.head.insertAdjacentHTML('beforeend', `<style>
     *{-webkit-tap-highlight-color:transparent!important}
     html{scroll-behavior:auto!important}
@@ -23,9 +24,22 @@
     .page-head h1,.lesson-title{animation:none!important}
     #app::before,#app::after,body::after{display:none!important}
     body::before{position:absolute!important}
+    [data-amb] span{animation:none!important}
+    [data-amb]{pointer-events:none!important}
     .sidebar,.topbar,.bottomnav{transform:translateZ(0);backface-visibility:hidden}
     section:has(#c-t){display:none!important}
     [data-post] img,[data-post] video{max-height:420px!important;object-fit:cover!important;object-position:top!important;border-radius:12px}
+
+    /* full-height fixed sidebar + full-width content (≥1000px) */
+    @media (min-width:1000px){
+      .shell{grid-template-columns:1fr!important}
+      .sidebar{position:fixed!important;left:0;top:0;bottom:0;width:250px;height:auto!important;overflow-y:auto;z-index:45}
+      .topbar{grid-column:1!important;margin-left:250px}
+      main{grid-column:1!important;margin-left:250px;max-width:none!important}
+      body.sb-hidden .topbar,body.sb-hidden main{margin-left:0!important}
+    }
+
+    /* menus + compose sheet */
     .x-pop,.c-sheet{position:fixed;z-index:10000;background:var(--panel,#161616);
       color:var(--ink,#f2f0ea);border:1px solid var(--line,rgba(244,244,242,.14));
       border-radius:16px;box-shadow:0 18px 45px rgba(0,0,0,.4)}
@@ -48,10 +62,10 @@
     .then(r => r.json()).catch(() => ({ err: 'network / old server — restart: python3 server.py' }));
   const rerender = () => window.dispatchEvent(new HashChangeEvent('hashchange'));
 
-  /* ---------- 1 · FAB → compose sheet (X-style) ---------- */
+  /* ---------- FAB → X-style compose sheet ---------- */
   function compose() {
     const token = localStorage.getItem(TK);
-    if (!token) { location.hash = '#/community'; return; }   // shows login hint
+    if (!token) { location.hash = '#/community'; return; }
     close();
     const s = document.createElement('div');
     s.className = 'c-sheet';
@@ -65,7 +79,6 @@
       '<button class="btn btn-primary btn-sm" data-c="go">POST</button></div>';
     document.body.appendChild(s);
     setTimeout(() => s.querySelector('#cs-t').focus(), 60);
-
     let media = null;
     s.querySelector('#cs-f').onchange = () => {
       const f = s.querySelector('#cs-f').files[0];
@@ -85,17 +98,18 @@
       if (d.ok) { s.remove(); rerender(); scrollTo({ top: 0 }); }
     };
   }
-
   function syncFab() {
     const f = document.getElementById('fab');
     if (f) f.style.setProperty('display', isCommunity() ? 'grid' : 'none', 'important');
   }
-  const oldFab = document.getElementById('fab');
-  if (oldFab) oldFab.onclick = compose;
   addEventListener('hashchange', () => setTimeout(syncFab, 60));
-  setInterval(() => { syncFab(); const f = document.getElementById('fab'); if (f && !f.dataset.v3) { f.dataset.v3 = '1'; f.onclick = compose; } }, 900);
+  setInterval(() => {
+    syncFab();
+    const f = document.getElementById('fab');
+    if (f && !f.dataset.v3) { f.dataset.v3 = '1'; f.onclick = compose; }
+  }, 900);
 
-  /* ---------- 2 · ⋯ menu, verified delete ---------- */
+  /* ---------- ⋯ menu with verified delete ---------- */
   let menu = null;
   const close = () => { if (menu) { menu.remove(); menu = null; } };
   function place(a) {
@@ -133,7 +147,7 @@
         if (d && d.ok) {
           close();
           const card = document.querySelector('[data-post="' + id + '"]');
-          if (card) { card.style.transition = 'all .3s'; card.style.opacity = '0'; card.style.transform = 'translateX(-24px)'; setTimeout(() => { card.remove(); }, 300); }
+          if (card) { card.style.transition = 'all .3s'; card.style.opacity = '0'; card.style.transform = 'translateX(-24px)'; setTimeout(() => card.remove(), 300); }
         } else {
           menu.innerHTML = '<p class="danger">✗ ' + (d && d.err ? d.err : 'failed') + '</p><button data-a="x">Close</button>';
         }
@@ -148,7 +162,7 @@
   addEventListener('scroll', close, true);
   addEventListener('resize', close);
 
-  /* ---------- 3 · media caps ---------- */
+  /* ---------- media caps ---------- */
   const cap = () => document.querySelectorAll('[data-post] img,[data-post] video').forEach(el => {
     el.style.maxHeight = '420px'; el.style.objectFit = 'cover'; el.style.objectPosition = 'top';
   });
