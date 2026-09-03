@@ -299,3 +299,34 @@ body.dark .card{background:linear-gradient(180deg,var(--panel),#121212)}
 body.dark .lesson-row{background:var(--panel)}
 body.dark .empty-note{color:var(--dim)}
 body.dark ::-webkit-scrollbar-thumb{background:#333;border-color:var(--bg0)}
+/* ================================================================
+   v8 — DARK-MODE ICONS · FIXED SIDEBAR · SCROLL PERFORMANCE
+   ================================================================ */
+
+/* (a) Dark mode: restore icon visibility on dark cards */
+body.dark .skill-ico{color:var(--ink);border-color:var(--line)}
+body.dark .row-num{color:var(--ink)}
+body.dark .lesson-row.done .row-num{color:var(--green)}
+body.dark .slot{color:var(--faint)}
+body.dark .q-opt:hover{border-color:rgba(244,244,242,.4)}
+
+/* (b) Performance: remove glass blur (major repaint cost on tablets) */
+.topbar,.bottomnav,.chip{backdrop-filter:none;-webkit-backdrop-filter:none}
+.topbar{background:#101010}
+.bottomnav{background:#101010}
+
+/* (c) Layout: sidebar becomes FIXED — immune to scroll, zero shutter */
+@media (min-width:1000px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;width:250px;height:auto;overflow-y:auto;z-index:45}
+  .topbar{grid-column:1;margin-left:250px}
+  main{grid-column:1;margin-left:250px}
+  body.sb-hidden .topbar,
+  body.sb-hidden main{margin-left:0}
+}
+
+/* (d) Menu refinement */
+.x-pop{backdrop-filter:none;-webkit-backdrop-filter:none}
+@media (prefers-reduced-motion:reduce){
+  .x-pop,#fab{animation:none!important;transition:none!important}
+}
