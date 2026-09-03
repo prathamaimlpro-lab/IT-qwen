@@ -109,3 +109,5 @@ import { LESSONS3, QUESTIONS3 } from './content3.js';
 Object.assign(LESSONS, LESSONS3); Object.assign(QUESTIONS, QUESTIONS3);
 import { LESSONS4, QUESTIONS4 } from './content4.js';
 Object.assign(LESSONS, LESSONS4); Object.assign(QUESTIONS, QUESTIONS4);
+import { LESSONS5, QUESTIONS5 } from './content5.js';
+Object.assign(LESSONS, LESSONS5); Object.assign(QUESTIONS, QUESTIONS5);
