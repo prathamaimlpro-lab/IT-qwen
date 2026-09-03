@@ -174,3 +174,31 @@ function paths(root) {
   draw();
 }
 REG.paths = paths;
+/* ================================================================
+ * SCHEDULER SIM — round-robin time-slicing (teaches multitasking)
+ * ================================================================ */
+function sched(root) {
+  const P = [{ n: '🎮 game' }, { n: '🎵 music' }, { n: '🌐 browser' }];
+  let run = 0, tick = 0;
+  const q = s => root.querySelector(s);
+  root.innerHTML =
+    '<div class="mem-grid">' +
+    '<div class="mem-box"><h5 style="color:var(--acc)">PROCESSES</h5><div data-wait style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"></div></div>' +
+    '<div class="mem-box"><h5 style="color:var(--gold)">CPU · ONE CORE</h5><div class="cpu-status" data-run></div><div class="cpu-status" data-t></div></div></div>' +
+    '<div class="power-row"><button class="btn btn-primary" data-tick>⏱ TICK (10 ms)</button><button class="btn btn-ghost" data-rst>RESET</button></div>' +
+    '<p class="muted" data-cap style="margin-top:10px;font-size:.8rem">Each press = one time slice. The OS rotates the CPU so everything "runs at once".</p>';
+  function draw() {
+    q('[data-run]').textContent = 'RUNNING: ' + P[run].n;
+    q('[data-t]').textContent = 'time slice #' + (tick + 1);
+    q('[data-wait]').innerHTML = P.map((p, i) =>
+      '<span class="mem-cell full" style="width:84px;height:40px;' + (i === run ? '' : 'opacity:.45') + '">' + p.n + '</span>').join('');
+  }
+  q('[data-tick]').onclick = () => {
+    run = (run + 1) % P.length; tick++;
+    q('[data-cap]').innerHTML = '⏱ Slice ' + tick + ': CPU switched to <b>' + P[run].n + '</b>. The switch is so fast it feels simultaneous.';
+    draw();
+  };
+  q('[data-rst]').onclick = () => { run = 0; tick = 0; draw(); };
+  draw();
+}
+REG.sched = sched;
