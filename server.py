@@ -1,9 +1,9 @@
-# AE3301 server v10: full platform + admin sessions + API-key licensing
+# AE3301 server v11: licensing with key→account binding + auth access
 import http.server, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time, threading, base64
 PORT = 9999
 ADMIN_KEY = 'ae3301-admin'
 ADMIN_USER = 'admin'
-ADMIN_PW = 'pratham.3438'   # change freely; lives only on your Pad
+ADMIN_PW = 'pratham.3438'
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(BASE, 'ae3301.db')
 MEDIA = os.path.join(BASE, 'media')
@@ -18,8 +18,8 @@ with LOCK:
     CONN.execute('create table if not exists posts(id text primary key, name text, text text, ts integer, media text, views integer default 0)')
     CONN.execute('create table if not exists likes(post text, name text, unique(post, name))')
     CONN.execute('create table if not exists comments(id text primary key, post text, name text, text text, ts integer)')
-    CONN.execute('create table if not exists apikeys(key text primary key, expires real, days integer)')
-    for stmt in ('alter table posts add column media text', 'alter table posts add column views integer default 0'):
+    CONN.execute('create table if not exists apikeys(key text primary key, expires real, days integer, bound_to text)')
+    for stmt in ('alter table posts add column media text', 'alter table posts add column views integer default 0', 'alter table apikeys add column bound_to text'):
         try: CONN.execute(stmt)
         except Exception: pass
     CONN.commit()
@@ -91,17 +91,32 @@ class H(http.server.SimpleHTTPRequestHandler):
             days = int(d.get('days', 7))
             key = 'AE-' + uuid.uuid4().hex[:4].upper() + '-' + uuid.uuid4().hex[:4].upper()
             with LOCK:
-                CONN.execute('insert into apikeys values(?,?,?)', (key, time.time() + days * 86400, days))
+                CONN.execute('insert into apikeys values(?,?,?,null)', (key, time.time() + days * 86400, days))
                 CONN.commit()
             self._json({'key': key})
         elif self.path == '/api/keylist':
             if not self._admin(d): return self._json({'err': 'admin only'}, 403)
-            with LOCK: rows = CONN.execute('select * from apikeys').fetchall()
-            self._json({'keys': [{'key': r['key'], 'left': max(0, int((r['expires'] - time.time()) / 86400))} for r in rows]})
+            with LOCK: rows = CONN.execute('select k.key, k.expires, u.name as bname from apikeys k left join users u on u.id = k.bound_to').fetchall()
+            self._json({'keys': [{'key': r['key'], 'left': max(0, int((r['expires'] - time.time()) / 86400)), 'bound': r['bname'] or ''} for r in rows]})
         elif self.path == '/api/keydel':
             if not self._admin(d): return self._json({'err': 'admin only'}, 403)
             with LOCK: CONN.execute('delete from apikeys where key=?', (d.get('key'),)); CONN.commit()
             self._json({'ok': True})
+        elif self.path == '/api/bindkey':
+            with LOCK:
+                u = self._user(d)
+                row = CONN.execute('select * from apikeys where key=?', ((d.get('key') or '').strip(),)).fetchone()
+                if not u: return self._json({'err': 'login first'}, 401)
+                if not row or row['expires'] <= time.time(): return self._json({'err': 'invalid or expired key'}, 404)
+                if row['bound_to'] and row['bound_to'] != u['id']: return self._json({'err': 'key already bound to another account'}, 409)
+                CONN.execute('update apikeys set bound_to=? where key=?', (u['id'], row['key']))
+                CONN.commit()
+            self._json({'ok': True})
+        elif self.path == '/api/access':
+            t = d.get('token')
+            if t in ADMIN and ADMIN[t] > time.time(): return self._json({'ok': True})
+            with LOCK: row = CONN.execute('select expires from apikeys where bound_to=?', (t,)).fetchone()
+            self._json({'ok': bool(row and row['expires'] > time.time())})
         elif self.path in ('/api/keycheck', '/api/activate'):
             with LOCK: row = CONN.execute('select expires from apikeys where key=?', ((d.get('key') or '').strip(),)).fetchone()
             self._json({'ok': bool(row and row['expires'] > time.time())})
@@ -223,5 +238,5 @@ class Srv(http.server.ThreadingHTTPServer):
     allow_reuse_address = True
     daemon_threads = True
 with Srv(('0.0.0.0', PORT), H) as s:
-    print('AE3301 v10 → http://localhost:%d (licensed)' % PORT)
+    print('AE3301 v11 → http://localhost:%d (bound licensing)' % PORT)
     s.serve_forever()
