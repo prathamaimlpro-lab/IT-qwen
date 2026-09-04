@@ -1,5 +1,7 @@
-/* AE3301 · PERF — render only what's visible (Google technique) */
-.card,.lesson-row,[data-post]{content-visibility:auto;contain-intrinsic-size:auto 220px}
-img{content-visibility:auto}
+/* AE3301 · PERF v2 — stability first on low-power GPUs */
+img{loading:lazy;decoding:async}
 *{-webkit-font-smoothing:antialiased}
+.sidebar,.topbar,.bottomnav{transform:none!important}
+#app::before,#app::after{display:none!important}
+[data-amb] span{animation:none!important}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
