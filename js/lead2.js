@@ -1,9 +1,9 @@
 /**
  * ================================================================
- *  AE3301 · LEADERBOARD v3 — fullscreen, THEME-AWARE
- *  · uses site CSS variables (matches light & dark)
- *  · visible ← Back / ✕ / Esc
- *  · entry point: LEFT SIDEBAR (no top-bar chip)
+ *  AE3301 · LEADERBOARD v4 — in-page route #/leaderboard
+ *  · keeps sidebar + topbar (no fullscreen takeover)
+ *  · no back / close buttons — navigation via the menu
+ *  · podium top-3 · ranks 4–10 · % rings · sticky YOU · XP/Lessons
  * ================================================================
  */
 (() => {
@@ -37,14 +37,10 @@
     const meR = rows.find(r => r.name === me);
     const meRank = rows.indexOf(meR) + 1;
     return '<style>@keyframes lbRise{from{opacity:0;transform:translateY(24px)}}@keyframes lbFade{from{opacity:0;transform:translateX(-8px)}}</style>' +
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
-      '<button class="btn btn-ghost btn-sm" data-x>← Back</button>' +
-      '<span class="mono faint" style="border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:.66rem">🏆 LEADERBOARD</span>' +
-      '<div style="flex:1"></div>' +
+      '<div class="page-head"><div class="kicker">🏆 LEADERBOARD</div><h1>Where you stand</h1></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:14px">' +
       '<button class="btn btn-sm ' + (tab === 'xp' ? 'btn-primary' : 'btn-ghost') + '" data-t="xp">XP</button>' +
-      '<button class="btn btn-sm ' + (tab === 'lessons' ? 'btn-primary' : 'btn-ghost') + '" data-t="lessons">Lessons</button>' +
-      '<button class="btn btn-ghost btn-sm" data-x>✕</button></div>' +
-      '<h2 style="font-family:var(--fd);margin:2px 0 18px">Where you stand</h2>' +
+      '<button class="btn btn-sm ' + (tab === 'lessons' ? 'btn-primary' : 'btn-ghost') + '" data-t="lessons">Lessons</button></div>' +
       '<div style="display:flex;gap:10px;align-items:flex-end">' + pod(top[1], 72, '#9aa0a6', 2) + pod(top[0], 96, '#c8a468', 1) + pod(top[2], 56, '#c08050', 3) + '</div>' +
       '<div style="margin-top:6px">' + rest + '</div>' +
       (meR ? '<div style="position:sticky;bottom:8px;margin-top:12px;display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--acc);border-radius:14px;background:var(--panel);box-shadow:0 -8px 30px rgba(0,0,0,.25)">' +
@@ -53,30 +49,28 @@
         ring(pct(meR), 'var(--green)') + '</div>' : '');
   }
 
-  async function open() {
-    const rows = await (await fetch('/api/board')).json();
-    const ov = document.createElement('div');
-    ov.style.cssText = 'position:fixed;inset:0;z-index:12000;background:var(--bg0);overflow:auto;padding:20px clamp(14px,6vw,120px) 40px;color:var(--ink)';
-    ov.innerHTML = '<div style="max-width:760px;margin:0 auto"><div data-b></div></div>';
-    document.body.appendChild(ov);
-    const draw = () => {
-      ov.querySelector('[data-b]').innerHTML = html(rows);
-      ov.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; draw(); });
-      ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => ov.remove());
-    };
-    draw();
-    const esc = e => { if (e.key === 'Escape') ov.remove(); };
-    addEventListener('keydown', esc);
-    ov.addEventListener('remove', () => removeEventListener('keydown', esc));
+  function mount() {
+    if ((location.hash || '').replace('#', '') !== '/leaderboard') return;
+    const v = document.getElementById('view');
+    document.querySelectorAll('[data-nav]').forEach(x => x.classList.toggle('active', x.dataset.nav === 'leaderboard'));
+    fetch('/api/board').then(r => r.json()).then(rows => {
+      const draw = () => {
+        v.innerHTML = '<div style="max-width:860px;margin:0 auto">' + html(rows) + '</div>';
+        document.title = 'Leaderboard · AE3301';
+        v.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; draw(); });
+      };
+      draw();
+    });
   }
 
-  /* sidebar entry (left menu), NOT top bar */
+  /* sidebar entry = normal link, like every other page */
   const side = document.querySelector('.side-nav');
   if (side && !side.querySelector('[data-lbnav]')) {
     const a = document.createElement('a');
-    a.className = 'nav-link'; a.dataset.lbnav = '1'; a.href = 'javascript:void(0)';
+    a.className = 'nav-link'; a.dataset.lbnav = '1'; a.dataset.nav = 'leaderboard'; a.href = '#/leaderboard';
     a.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4ZM7 6H4a3 3 0 0 0 3 3M17 6h3a3 3 0 0 1-3 3"/></svg><span>Leaderboard</span>';
-    a.onclick = open;
     side.appendChild(a);
   }
+  addEventListener('hashchange', () => setTimeout(mount, 0));
+  setTimeout(mount, 60);
 })();
