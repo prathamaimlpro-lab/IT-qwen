@@ -1,0 +1,5 @@
+/* AE3301 · PERF — render only what's visible (Google technique) */
+.card,.lesson-row,[data-post]{content-visibility:auto;contain-intrinsic-size:auto 220px}
+img{content-visibility:auto}
+*{-webkit-font-smoothing:antialiased}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
