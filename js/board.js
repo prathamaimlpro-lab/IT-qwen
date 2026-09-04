@@ -6,7 +6,7 @@
  * ================================================================
  */
 import * as S from './core.js';
-import { QUESTIONS, LEVELS } from './data.js';
+import { QUESTIONS, LEVELS, LESSONS } from './data.js';
 
 const dkey = t => new Date(t).toISOString().slice(0, 10);
 const findQ = id => { for (const [topic, arr] of Object.entries(QUESTIONS)) { const q = arr.find(x => x.id === id); if (q) return { q, topic }; } return null; };
