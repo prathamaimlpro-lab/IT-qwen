@@ -103,11 +103,13 @@
     if (f) f.style.setProperty('display', isCommunity() ? 'grid' : 'none', 'important');
   }
   addEventListener('hashchange', () => setTimeout(syncFab, 60));
-  setInterval(() => {
+  const fabFix = () => {
     syncFab();
     const f = document.getElementById('fab');
     if (f && !f.dataset.v3) { f.dataset.v3 = '1'; f.onclick = compose; }
-  }, 900);
+  };
+  fabFix();
+  new MutationObserver(fabFix).observe(document.body, { childList: true });
 
   /* ---------- ⋯ menu with verified delete ---------- */
   let menu = null;
