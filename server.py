@@ -1,5 +1,5 @@
 # AE3301 server v11: licensing with key→account binding + auth access
-import http.server, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time, threading, base64
+import http.server, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time, threading, base64, gzip, zlib
 PORT = 9999
 ADMIN_KEY = 'ae3301-admin'
 ADMIN_USER = 'admin'
@@ -25,6 +25,7 @@ with LOCK:
     CONN.commit()
 EXTS = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm'}
 class H(http.server.SimpleHTTPRequestHandler):
+   protocol_version = 'HTTP/1.1'
     def _json(self, obj, code=200):
         b = json.dumps(obj).encode()
         self.send_response(code)
@@ -49,7 +50,25 @@ class H(http.server.SimpleHTTPRequestHandler):
     def _admin(self, d):
         t = d.get('admin') or d.get('key')
         return t == ADMIN_KEY or (t in ADMIN and ADMIN[t] > time.time())
-    def do_GET(self):
+  def _static(self):
+        p = self.translate_path(self.path)
+        if not os.path.isfile(p):
+            return super().do_GET()
+        with open(p, 'rb') as f: data = f.read()
+        etag = '"' + str(zlib.crc32(data)) + '"'
+        if self.headers.get('If-None-Match') == etag:
+            self.send_response(304)
+            self.send_header('ETag', etag); self.send_header('Cache-Control', 'no-cache')
+            self.end_headers(); return
+        use_gz = 'gzip' in (self.headers.get('Accept-Encoding') or '') and os.path.splitext(p)[1] in ('.js', '.css', '.html', '.svg')
+        body = gzip.compress(data, 6) if use_gz else data
+        self.send_response(200)
+        self.send_header('Content-Type', self.guess_type(p))
+        if use_gz: self.send_header('Content-Encoding', 'gzip')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('ETag', etag); self.send_header('Cache-Control', 'no-cache')
+        self.end_headers(); self.wfile.write(body)
+def do_GET(self):
         if self.path == '/api/ping': self._json({'ok': True})
         elif self.path == '/api/board':
             with LOCK: rows = CONN.execute('select name,xp,lessons from users order by xp desc limit 20').fetchall()
@@ -64,7 +83,7 @@ class H(http.server.SimpleHTTPRequestHandler):
             pid = self.path.split('=')[-1]
             with LOCK: rows = CONN.execute('select * from comments where post=? order by ts', (pid,)).fetchall()
             self._json([dict(r) for r in rows])
-        else: super().do_GET()
+        else: self._static()
     def do_POST(self):
         d = self._body()
         if self.path == '/run':
