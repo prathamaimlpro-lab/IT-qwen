@@ -80,7 +80,7 @@
 
   const GEN = { bubble: () => bubble(rand(8, 1, 40)), selection: () => selection(rand(8, 1, 40)), insertion: () => insertion(rand(8, 1, 40)), linear: () => { const a = rand(10, 1, 50); return linear(a, pick(a)); }, binary: () => { const a = rand(10, 1, 50); return binary(a, pick(a)); }, dfsTree, bfsGraph };
   const genFor = id => GEN[id] || ((window.AE3301_PRACTICAL || []).find(p => p.id === id) || {}).gen || (window.AE3301_DP || {})[id];
-
+  window.AE3301_GEN = GEN;
   /* ---------- catalog page ---------- */
   const F = { q: '', cat: 'all', diff: 'all', type: 'all' };
   function page() {
@@ -131,7 +131,7 @@
   }
   function mount() {
     const h = (location.hash || '').replace('#', '');
-    document.querySelectorAll('[data-nav]').forEach(x => x.classList.toggle('active', x.dataset.nav === 'learn' && (h === '/learn' || h.startsWith('/visualize'))));
+    document.querySelectorAll('[data-nav]').forEach(x => x.classList.toggle('active', x.dataset.nav === 'learn' && h === '/learn'));
     if (h === '/learn') { learnStrip(); return; }
     if (!h.startsWith('/visualize')) return;
     const id = h.split('/')[2];
