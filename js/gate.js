@@ -15,7 +15,8 @@
 
   /* dark-only + hide legacy theme toggle */
   document.body.classList.add('dark'); localStorage.setItem('ae3301:dark', '1');
-  setInterval(() => { const t = document.querySelector('[data-th]'); if (t) t.style.display = 'none'; }, 800);
+  const hideTh = () => { const t = document.querySelector('[data-th]'); if (t) t.style.display = 'none'; };
+  hideTh(); addEventListener('hashchange', hideTh);
 
   /* ---------- merge admin-authored questions (from /admin.html) ---------- */
   import('./data.js').then(({ QUESTIONS }) => {
