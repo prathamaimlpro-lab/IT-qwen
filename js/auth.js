@@ -111,5 +111,5 @@
     }
   }
   setTimeout(hijack, 200);
-  setInterval(hijack, 900);
+  new MutationObserver(hijack).observe(document.querySelector('.hdr-chips') || document.body, { childList: true, subtree: true });
 })();
