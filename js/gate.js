@@ -1,21 +1,40 @@
 /**
  * ================================================================
- *  AE3301 · ACCESS GATE v4 — FREE PREVIEW + LICENSED CONTENT
- *  · anyone can browse home + curriculum titles
- *  · protected routes render an Unlock panel (key / account)
- *  · license = admin session | account w/ bound key | valid key
- *  · no fullscreen lock → no bypass path exists
+ *  AE3301 · ACCESS GATE v5 — student site, zero admin surfaces
+ *  · free preview (home + curriculum titles) for everyone
+ *  · protected routes → Unlock panel (key / account)
+ *  · license = account w/ bound key | valid stored key
+ *  · merges admin-authored questions from /api/qlist
+ *  · admin console lives ONLY at /admin.html
  * ================================================================
  */
 (() => {
   'use strict';
-  const AK = 'ae3301:apikey', AT = 'ae3301:admintoken', TK = 'ae3301:token';
+  const AK = 'ae3301:apikey', TK = 'ae3301:token';
   const post = (p, b) => fetch(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json()).catch(() => ({ err: 'network' }));
 
-  /* dark-only + hide legacy theme toggle + hide legacy admin chips */
+  /* dark-only + hide legacy theme toggle */
   document.body.classList.add('dark'); localStorage.setItem('ae3301:dark', '1');
   setInterval(() => { const t = document.querySelector('[data-th]'); if (t) t.style.display = 'none'; }, 800);
-  document.head.insertAdjacentHTML('beforeend', '<style>[data-admin],[data-admin2]{display:none!important}</style>');
+
+  /* ---------- merge admin-authored questions (from /admin.html) ---------- */
+  import('./data.js').then(({ QUESTIONS }) => {
+    const seen = new Set();
+    fetch('/api/qlist').then(r => r.ok ? r.json() : []).then(rows => {
+      (Array.isArray(rows) ? rows : []).forEach(r => {
+        if (seen.has(r.id)) return; seen.add(r.id);
+        const orig = JSON.parse(r.options || '[]');
+        const idx = [0, 1, 2, 3].sort(() => Math.random() - .5);
+        const opts = idx.map(i => orig[i]); const ans = idx.indexOf(0);
+        (QUESTIONS[r.topic] = QUESTIONS[r.topic] || []).push({
+          id: 'x-' + r.id, tier: r.tier, tags: [(r.topic || '').replace('cb-', '') || 'custom'],
+          q: r.q, options: opts, answer: ans, explain: r.explain,
+          hint: r.hint || 'Think it through.',
+          wrongWhy: opts.map((o, i) => i === ans ? '' : 'Not quite — read the explanation after answering.')
+        });
+      });
+    }).catch(() => {});
+  });
 
   const PROTECTED = [/^\/lesson\//, /^\/level\//, /^\/arena/, /^\/problems/, /^\/practice\//, /^\/community/, /^\/profile/];
   let unlocked = false;
@@ -58,20 +77,7 @@
     }
   }
 
-  function adminNav() {
-    const side = document.querySelector('.side-nav');
-    if (side && !side.querySelector('[data-admnav]')) {
-      const a = document.createElement('a');
-      a.className = 'nav-link'; a.dataset.admnav = '1'; a.href = 'javascript:void(0)';
-      a.innerHTML = '🛡️<span>Admin</span>';
-      a.onclick = () => window.dispatchEvent(new CustomEvent('ae3301-admin-panel'));
-      side.appendChild(a);
-    }
-  }
-
   async function boot() {
-    const at = localStorage.getItem(AT);
-    if (at) { const d = await post('/api/qcheck', { key: at }); if (d.ok) { unlocked = true; adminNav(); return; } }
     const tk = localStorage.getItem(TK);
     if (tk) { const d = await post('/api/access', { token: tk }); if (d.ok) { unlocked = true; return; } }
     const key = localStorage.getItem(AK);
