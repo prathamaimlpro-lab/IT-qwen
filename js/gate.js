@@ -36,8 +36,10 @@
     ov.querySelector('[data-acct]').onclick = () => { ov.remove(); window.AE3301_AUTH && window.AE3301_AUTH.open(); };
     ov.querySelector('#g-go').onclick = async () => {
       const k = ov.querySelector('#g-key').value.trim();
-      const d = await post('/api/activate', { key: k });
-      if (d.ok) { localStorage.setItem(AK, k); location.reload(); }
+      const tk = localStorage.getItem(TK);
+      const d = tk ? await post('/api/bindkey', { token: tk, key: k })
+                   : await post('/api/activate', { key: k });
+      if (d.ok) { if (!tk) localStorage.setItem(AK, k); location.reload(); }
       else ov.querySelector('#g-err').textContent = '✗ ' + (d.err || 'invalid key');
     };
     ov.querySelector('#g-ad').onclick = async () => {
