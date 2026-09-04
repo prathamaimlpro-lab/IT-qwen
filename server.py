@@ -1,4 +1,4 @@
-# AE3301 server v11: licensing with key→account binding + auth access
+# AE3301 server v12: licensing + gzip/keep-alive/etag static serving
 import http.server, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time, threading, base64, gzip, zlib
 PORT = 9999
 ADMIN_KEY = 'ae3301-admin'
@@ -50,7 +50,7 @@ class H(http.server.SimpleHTTPRequestHandler):
     def _admin(self, d):
         t = d.get('admin') or d.get('key')
         return t == ADMIN_KEY or (t in ADMIN and ADMIN[t] > time.time())
-  def _static(self):
+    def _static(self):
         p = self.translate_path(self.path)
         if not os.path.isfile(p):
             return super().do_GET()
@@ -68,7 +68,7 @@ class H(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body)))
         self.send_header('ETag', etag); self.send_header('Cache-Control', 'no-cache')
         self.end_headers(); self.wfile.write(body)
-def do_GET(self):
+    def do_GET(self):
         if self.path == '/api/ping': self._json({'ok': True})
         elif self.path == '/api/board':
             with LOCK: rows = CONN.execute('select name,xp,lessons from users order by xp desc limit 20').fetchall()
@@ -110,7 +110,7 @@ def do_GET(self):
             days = int(d.get('days', 7))
             key = 'AE-' + uuid.uuid4().hex[:4].upper() + '-' + uuid.uuid4().hex[:4].upper()
             with LOCK:
-                CONN.execute('insert into apikeys values(?,?,?,null)', (key, time.time() + days * 86400, days))
+                CONN.execute('insert into apikeys(key, expires, days) values(?,?,?)', (key, time.time() + days * 86400, days))
                 CONN.commit()
             self._json({'key': key})
         elif self.path == '/api/keylist':
@@ -257,5 +257,5 @@ class Srv(http.server.ThreadingHTTPServer):
     allow_reuse_address = True
     daemon_threads = True
 with Srv(('0.0.0.0', PORT), H) as s:
-    print('AE3301 v11 → http://localhost:%d (bound licensing)' % PORT)
+    print('AE3301 v12 → http://localhost:%d (gzip + keep-alive + etag)' % PORT)
     s.serve_forever()
