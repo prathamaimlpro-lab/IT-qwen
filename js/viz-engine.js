@@ -1,7 +1,5 @@
 /**
- * AE3301 · VIZ ENGINE v4 — visualizedsa-style detail layout, AE3301 colors
- * left controls+legend · center chart+banner+chips · right inspector
- * accordions (how/edge/code) · fullscreen+code split · settings modal
+ * AE3301 · VIZ ENGINE v4.1 — detail layout + TRUE fullscreen
  */
 (() => {
   'use strict';
@@ -22,7 +20,7 @@
     const codes = Object.assign({}, trace.codes || {}); if (trace.code) codes.Pseudo = trace.code;
     let lang = Object.keys(codes)[0] || 'Pseudo';
     root.innerHTML =
-      '<style>.vz-top{display:flex;gap:8px;align-items:center;margin:6px 0 10px}.vz-grid{display:grid;gap:14px;grid-template-columns:250px minmax(0,1fr) 290px}@media(max-width:1100px){.vz-grid{grid-template-columns:1fr}}.vz .card{padding:14px}.vzfs{position:fixed;inset:0;z-index:15000;background:var(--bg0,#0b0b0b);overflow:auto;padding:16px}.vzfs .vz-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.vzfs [data-left],.vzfs [data-right],.vzfs [data-top],.vzfs [data-title],.vzfs [data-acc],.vzfs [data-chips],.vzfs [data-scrubrow],.vzfs [data-banner]{display:none!important}.vzfs [data-codecol]{display:block!important}.vz-acc>div>button{width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--ink);font-weight:700;cursor:pointer;margin-bottom:8px}.vz-acc .body{display:none;padding:4px 4px 12px}</style>' +
+      '<style>.vz-top{display:flex;gap:8px;align-items:center;margin:6px 0 10px}.vz-grid{display:grid;gap:14px;grid-template-columns:250px minmax(0,1fr) 290px}@media(max-width:1100px){.vz-grid{grid-template-columns:1fr}}.vz .card{padding:14px}.vzfs{position:fixed;inset:0;z-index:15000;background:var(--bg0,#0b0b0b);overflow:auto;padding:16px}.vzfs .vz-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.vzfs [data-left],.vzfs [data-right],.vzfs [data-acc],.vzfs [data-chips],.vzfs [data-scrubrow],.vzfs [data-banner]{display:none!important}.vzfs [data-title]{display:none}.vzfs [data-top]{position:sticky;top:0;z-index:5;background:var(--bg0,#0b0b0b);padding:6px 0}.vzfs [data-top] a{display:none}.vzfs .vz-grid{min-height:calc(100dvh - 130px)}.vzfs [data-codecol]{display:block!important}.vz-acc>div>button{width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--ink);font-weight:700;cursor:pointer;margin-bottom:8px}.vz-acc .body{display:none;padding:4px 4px 12px}</style>' +
       '<div class="vz" data-vz>' +
       '<div class="vz-top" data-top><a class="btn btn-ghost btn-sm" href="#/visualize">← Back to Visualizers</a><span style="flex:1"></span>' +
       '<button class="btn btn-ghost btn-sm" data-c="share">⚯ Share</button><button class="btn btn-ghost btn-sm" data-c="fs">⛶ Full Screen + Code</button></div>' +
@@ -120,6 +118,8 @@
     function play() { if (playing) return stop(); playing = true; q('[data-c="play"]').innerHTML = '⏸ Pause'; timer = setInterval(() => { if (cur < steps.length - 1) { cur++; draw(); } else stop(); }, delay()); }
     function fs(on) {
       const wz = q('[data-vz]'); wz.classList.toggle('vzfs', on);
+      document.body.classList.toggle('ae-fs', on);
+      q('[data-c="fs"]').innerHTML = on ? '✕ Exit Full Screen' : '⛶ Full Screen + Code';
       if (on) q('[data-grid]').appendChild(q('[data-codecol]')); else q('[data-b="code"]').appendChild(q('[data-codecol]'));
       renderCode();
     }
