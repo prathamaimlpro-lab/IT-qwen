@@ -1,14 +1,21 @@
 /**
  * ================================================================
- *  AE3301 · ACCESS GATE v2
- *  unlock paths: valid API key · activated account · admin session
- *  otherwise → lock screen (key / admin / "I have an account")
+ *  AE3301 · ACCESS GATE v3
+ *  · dark-only theme (light removed, toggle hidden)
+ *  · unlock: API key · activated account · admin session
+ *  · admin panel: keygen with VISIBLE result + copy + errors
  * ================================================================
  */
 (() => {
   'use strict';
   const AK = 'ae3301:apikey', AT = 'ae3301:admintoken', TK = 'ae3301:token';
-  const post = (p, b) => fetch(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json()).catch(() => ({ err: 'network' }));
+  const post = (p, b) => fetch(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json()).catch(() => ({ err: 'network / old server — restart: python3 server.py' }));
+
+  /* ---------- DARK-ONLY ---------- */
+  document.body.classList.add('dark');
+  localStorage.setItem('ae3301:dark', '1');
+  setInterval(() => { const t = document.querySelector('[data-th]'); if (t) t.style.display = 'none'; }, 800);
+
   document.head.insertAdjacentHTML('beforeend', '<style>[data-admin],[data-admin2]{display:none!important}</style>');
 
   function lockScreen(needsKey) {
@@ -37,8 +44,7 @@
     ov.querySelector('#g-go').onclick = async () => {
       const k = ov.querySelector('#g-key').value.trim();
       const tk = localStorage.getItem(TK);
-      const d = tk ? await post('/api/bindkey', { token: tk, key: k })
-                   : await post('/api/activate', { key: k });
+      const d = tk ? await post('/api/bindkey', { token: tk, key: k }) : await post('/api/activate', { key: k });
       if (d.ok) { if (!tk) localStorage.setItem(AK, k); location.reload(); }
       else ov.querySelector('#g-err').textContent = '✗ ' + (d.err || 'invalid key');
     };
@@ -49,23 +55,31 @@
     };
   }
 
-  async function openPanel() {
+  async function openPanel(freshKey) {
     const token = localStorage.getItem(AT);
     const d = await post('/api/keylist', { admin: token });
     const ov = document.createElement('div'); ov.className = 'overlay';
     ov.innerHTML = '<div class="modal-card" style="max-height:86vh;overflow:auto;text-align:left">' +
       '<h3 style="text-transform:uppercase">Admin · API keys</h3>' +
       '<p class="muted">Keys bind to the first account that uses them.</p>' +
+      (freshKey ? '<div style="margin:12px 0;border:1px solid var(--acc);border-radius:12px;padding:14px;text-align:center"><div class="mono" style="font-size:1.3rem;letter-spacing:.2em;color:var(--acc)">' + freshKey + '</div><button class="btn btn-primary btn-sm" data-copynew style="margin-top:10px">⧉ COPY KEY</button></div>' : '') +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">' +
       [7, 30, 180, 365].map(x => '<button class="btn btn-ghost btn-sm" data-gen="' + x + '">+ ' + (x === 7 ? '7 days' : x === 30 ? '1 month' : x === 180 ? '6 months' : '1 year') + '</button>').join('') +
       '<button class="btn btn-gold btn-sm" data-author>✚ Author question</button></div>' +
-      '<div>' + (d.keys || []).map(k => '<div style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line)"><code class="mono" style="flex:1">' + k.key + '</code>' + (k.bound ? '<span class="mono" style="color:var(--green);font-size:.7rem">→ ' + k.bound + '</span>' : '<span class="mono faint">unbound</span>') + '<span class="mono faint">' + k.left + 'd</span><button class="btn btn-ghost btn-sm" data-copy="' + k.key + '">⧉</button><button class="btn btn-danger btn-sm" data-rev="' + k.key + '">✕</button></div>').join('') || '<p class="muted">No keys yet.</p>' + '</div>' +
+      '<p data-kerr style="color:var(--red);font-size:.8rem"></p>' +
+      '<div>' + (d.keys || []).map(k => '<div style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line)"><code class="mono" style="flex:1">' + k.key + '</code>' + (k.bound ? '<span class="mono" style="color:var(--green);font-size:.7rem">→ ' + k.bound + '</span>' : '<span class="mono faint">unbound</span>') + '<span class="mono faint">' + (k.left > 0 ? k.left + 'd left' : 'expired') + '</span><button class="btn btn-ghost btn-sm" data-copy="' + k.key + '">⧉</button><button class="btn btn-danger btn-sm" data-rev="' + k.key + '">✕</button></div>').join('') || '<p class="muted">No keys yet.</p>' + '</div>' +
       '<div class="cp-actions"><button class="btn btn-ghost" data-x>CLOSE</button></div></div>';
     document.body.appendChild(ov);
     ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
     ov.querySelector('[data-x]').onclick = () => ov.remove();
+    ov.querySelector('[data-copynew]') && (ov.querySelector('[data-copynew]').onclick = () => navigator.clipboard && navigator.clipboard.writeText(freshKey));
     ov.querySelector('[data-author]').onclick = () => { ov.remove(); const q = document.querySelector('[data-admin]'); q && q.click(); };
-    ov.querySelectorAll('[data-gen]').forEach(b => b.onclick = async () => { await post('/api/keygen', { admin: token, days: +b.dataset.gen }); ov.remove(); openPanel(); });
+    ov.querySelectorAll('[data-gen]').forEach(b => b.onclick = async () => {
+      b.textContent = '…';
+      const r = await post('/api/keygen', { admin: token, days: +b.dataset.gen });
+      if (r.key) { ov.remove(); openPanel(r.key); }
+      else { ov.remove(); openPanel(); setTimeout(() => { const p = document.querySelector('[data-kerr]'); if (p) p.textContent = '✗ ' + (r.err || 'generation failed'); }, 50); }
+    });
     ov.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => navigator.clipboard && navigator.clipboard.writeText(b.dataset.copy));
     ov.querySelectorAll('[data-rev]').forEach(b => b.onclick = async () => { await post('/api/keydel', { admin: token, key: b.dataset.rev }); ov.remove(); openPanel(); });
   }
@@ -75,7 +89,7 @@
     if (side && !side.querySelector('[data-admnav]')) {
       const a = document.createElement('a');
       a.className = 'nav-link'; a.dataset.admnav = '1'; a.href = 'javascript:void(0)';
-      a.innerHTML = '🛡️<span>Admin</span>'; a.onclick = openPanel;
+      a.innerHTML = '🛡️<span>Admin</span>'; a.onclick = () => openPanel();
       side.appendChild(a);
     }
   }
