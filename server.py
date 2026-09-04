@@ -25,7 +25,7 @@ with LOCK:
     CONN.commit()
 EXTS = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm'}
 class H(http.server.SimpleHTTPRequestHandler):
-   protocol_version = 'HTTP/1.1'
+    protocol_version = 'HTTP/1.1'
     def _json(self, obj, code=200):
         b = json.dumps(obj).encode()
         self.send_response(code)
