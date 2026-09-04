@@ -1,0 +1,40 @@
+/* ================================================================
+   AE3301 · LAYOUT ENGINE — responsive shell, tokens, fs template
+   ================================================================ */
+:root { --btn-h: 44px; --side-w: 250px; }
+body[data-l="xs"] { --btn-h: 48px; }
+body[data-l="sm"] { --btn-h: 46px; }
+
+/* tablet portrait: slim icon sidebar */
+@media (max-width:1023px) {
+  .sidebar { width: 68px; }
+  .sidebar .nav-link span, .sidebar .side-brand b, .sidebar .side-foot { display: none; }
+  .topbar, main { margin-left: 68px !important; }
+}
+/* phones: no sidebar, bottom nav */
+@media (max-width:767px) {
+  .sidebar { display: none !important; }
+  .topbar, main { margin-left: 0 !important; }
+  .bottomnav { display: flex !important; }
+  main { padding-bottom: 76px !important; }
+  .card { padding: 14px !important; }
+  h1 { font-size: 1.5rem !important; }
+}
+
+/* toolbar flow (overflow resolver support) */
+.hdr-chips { position: relative; flex-wrap: nowrap; overflow: hidden; }
+.flow-pop { position: fixed; z-index: 12000; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; padding: 8px; display: flex; flex-direction: column; gap: 6px;
+  box-shadow: 0 16px 40px rgba(0,0,0,.4); }
+
+/* fullscreen: hide the whole shell */
+body.ae-fs .sidebar, body.ae-fs .topbar, body.ae-fs .bottomnav { display: none !important; }
+body.ae-fs main { margin: 0 !important; padding: 0 !important; max-width: none !important; }
+
+/* fullscreen viz fills the screen */
+[data-vz].vzfs { padding: 10px 16px; }
+[data-vz].vzfs .vz-grid { min-height: calc(100dvh - 120px); align-items: stretch; }
+[data-vz].vzfs [data-mid] .card { height: 100%; }
+
+/* touch tokens */
+body[data-l="xs"] .btn, body[data-l="sm"] .btn { min-height: var(--btn-h); }
