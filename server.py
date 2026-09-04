@@ -167,6 +167,17 @@ class H(http.server.SimpleHTTPRequestHandler):
                         CONN.execute('update users set xp=xp+2 where name=?', (row['name'],))
                 CONN.commit()
             self._json({'ok': True})
+       elif self.path == '/api/changepw':
+            with LOCK:
+                u = self._user(d)
+                if not u: return self._json({'err': 'login first'}, 401)
+                if hashlib.sha256((d.get('old') or '').encode()).hexdigest() != u['pw']:
+                    return self._json({'err': 'current password wrong'}, 403)
+                new = (d.get('new') or '').strip()
+                if len(new) < 4: return self._json({'err': 'new password too short (4+)'}, 400)
+                CONN.execute('update users set pw=? where id=?', (hashlib.sha256(new.encode()).hexdigest(), u['id']))
+                CONN.commit()
+            self._json({'ok': True})
         elif self.path == '/api/comment':
             with LOCK: u = self._user(d)
             if not u: return self._json({'err': 'log in first'}, 401)
