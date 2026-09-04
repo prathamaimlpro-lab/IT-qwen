@@ -1,12 +1,14 @@
-# AE3301 server v8: stable DB + comments + media + views + pairing + tunnel-safe
-import http.server, socketserver, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time, threading, base64
+# AE3301 server v10: full platform + admin sessions + API-key licensing
+import http.server, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time, threading, base64
 PORT = 9999
 ADMIN_KEY = 'ae3301-admin'
+ADMIN_USER = 'admin'
+ADMIN_PW = 'pratham.3438'   # change freely; lives only on your Pad
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(BASE, 'ae3301.db')
 MEDIA = os.path.join(BASE, 'media')
 os.makedirs(MEDIA, exist_ok=True)
-PAIR = {}  # code -> (user_id, expiry)
+PAIR, ADMIN = {}, {}
 CONN = sqlite3.connect(DB, check_same_thread=False, timeout=20)
 CONN.row_factory = sqlite3.Row
 LOCK = threading.Lock()
@@ -16,6 +18,7 @@ with LOCK:
     CONN.execute('create table if not exists posts(id text primary key, name text, text text, ts integer, media text, views integer default 0)')
     CONN.execute('create table if not exists likes(post text, name text, unique(post, name))')
     CONN.execute('create table if not exists comments(id text primary key, post text, name text, text text, ts integer)')
+    CONN.execute('create table if not exists apikeys(key text primary key, expires real, days integer)')
     for stmt in ('alter table posts add column media text', 'alter table posts add column views integer default 0'):
         try: CONN.execute(stmt)
         except Exception: pass
@@ -29,7 +32,6 @@ class H(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-Length', str(len(b)))
         self.end_headers(); self.wfile.write(b)
     def _body(self):
-        # chunked support: tunnels/proxies often send POST bodies chunked
         if 'chunked' in (self.headers.get('Transfer-Encoding') or '').lower():
             data = b''
             while True:
@@ -44,6 +46,9 @@ class H(http.server.SimpleHTTPRequestHandler):
         except Exception: return {}
     def _user(self, d):
         return CONN.execute('select * from users where id=?', (d.get('token'),)).fetchone()
+    def _admin(self, d):
+        t = d.get('admin') or d.get('key')
+        return t == ADMIN_KEY or (t in ADMIN and ADMIN[t] > time.time())
     def do_GET(self):
         if self.path == '/api/ping': self._json({'ok': True})
         elif self.path == '/api/board':
@@ -76,7 +81,33 @@ class H(http.server.SimpleHTTPRequestHandler):
                     try: os.unlink(p)
                     except Exception: pass
             self._json({'out': out})
-        elif self.path == '/api/qcheck': self._json({'ok': d.get('key') == ADMIN_KEY})
+        elif self.path == '/api/adminlogin':
+            if d.get('user') == ADMIN_USER and d.get('pw') == ADMIN_PW:
+                t = uuid.uuid4().hex; ADMIN[t] = time.time() + 30 * 86400
+                self._json({'token': t})
+            else: self._json({'err': 'bad credentials'}, 401)
+        elif self.path == '/api/keygen':
+            if not self._admin(d): return self._json({'err': 'admin only'}, 403)
+            days = int(d.get('days', 7))
+            key = 'AE-' + uuid.uuid4().hex[:4].upper() + '-' + uuid.uuid4().hex[:4].upper()
+            with LOCK:
+                CONN.execute('insert into apikeys values(?,?,?)', (key, time.time() + days * 86400, days))
+                CONN.commit()
+            self._json({'key': key})
+        elif self.path == '/api/keylist':
+            if not self._admin(d): return self._json({'err': 'admin only'}, 403)
+            with LOCK: rows = CONN.execute('select * from apikeys').fetchall()
+            self._json({'keys': [{'key': r['key'], 'left': max(0, int((r['expires'] - time.time()) / 86400))} for r in rows]})
+        elif self.path == '/api/keydel':
+            if not self._admin(d): return self._json({'err': 'admin only'}, 403)
+            with LOCK: CONN.execute('delete from apikeys where key=?', (d.get('key'),)); CONN.commit()
+            self._json({'ok': True})
+        elif self.path in ('/api/keycheck', '/api/activate'):
+            with LOCK: row = CONN.execute('select expires from apikeys where key=?', ((d.get('key') or '').strip(),)).fetchone()
+            self._json({'ok': bool(row and row['expires'] > time.time())})
+        elif self.path == '/api/qcheck':
+            t = d.get('key')
+            self._json({'ok': t == ADMIN_KEY or (t in ADMIN and ADMIN[t] > time.time())})
         elif self.path == '/api/pair':
             with LOCK: u = self._user(d)
             if not u: return self._json({'err': 'login first'}, 401)
@@ -116,15 +147,26 @@ class H(http.server.SimpleHTTPRequestHandler):
                 CONN.execute('update users set xp=?,lessons=?,accent=? where id=?', (int(d.get('xp', 0)), int(d.get('lessons', 0)), d.get('accent', '#f0561c'), d.get('token', '')))
                 CONN.commit()
             self._json({'ok': True})
+        elif self.path == '/api/changepw':
+            with LOCK:
+                u = self._user(d)
+                if not u: return self._json({'err': 'login first'}, 401)
+                if hashlib.sha256((d.get('old') or '').encode()).hexdigest() != u['pw']:
+                    return self._json({'err': 'current password wrong'}, 403)
+                new = (d.get('new') or '').strip()
+                if len(new) < 4: return self._json({'err': 'new password too short (4+)'}, 400)
+                CONN.execute('update users set pw=? where id=?', (hashlib.sha256(new.encode()).hexdigest(), u['id']))
+                CONN.commit()
+            self._json({'ok': True})
         elif self.path == '/api/qadd':
-            if d.get('key') != ADMIN_KEY: return self._json({'err': 'admin key required'}, 403)
+            if not self._admin(d): return self._json({'err': 'admin key required'}, 403)
             uid = uuid.uuid4().hex[:8]
             with LOCK:
                 CONN.execute('insert into questions values(?,?,?,?,?,?,?,?)', (uid, d.get('topic', ''), d.get('tier', 'concept'), d.get('q', ''), json.dumps(d.get('options', [])), 0, d.get('explain', ''), d.get('hint', '')))
                 CONN.commit()
             self._json({'ok': True, 'id': uid})
         elif self.path == '/api/qdel':
-            if d.get('key') != ADMIN_KEY: return self._json({'err': 'admin key required'}, 403)
+            if not self._admin(d): return self._json({'err': 'admin key required'}, 403)
             with LOCK:
                 CONN.execute('delete from questions where id=?', (d.get('id'),)); CONN.commit()
             self._json({'ok': True})
@@ -150,7 +192,7 @@ class H(http.server.SimpleHTTPRequestHandler):
             with LOCK:
                 u = self._user(d)
                 row = CONN.execute('select name from posts where id=?', (d.get('post'),)).fetchone()
-                if not u or (row and row['name'] != u['name'] and d.get('key') != ADMIN_KEY): return self._json({'err': 'not yours'}, 403)
+                if not u or (row and row['name'] != u['name'] and not self._admin(d)): return self._json({'err': 'not yours'}, 403)
                 CONN.execute('delete from posts where id=?', (d.get('post'),))
                 CONN.execute('delete from likes where post=?', (d.get('post'),))
                 CONN.execute('delete from comments where post=?', (d.get('post'),))
@@ -167,17 +209,6 @@ class H(http.server.SimpleHTTPRequestHandler):
                         CONN.execute('update users set xp=xp+2 where name=?', (row['name'],))
                 CONN.commit()
             self._json({'ok': True})
-       elif self.path == '/api/changepw':
-            with LOCK:
-                u = self._user(d)
-                if not u: return self._json({'err': 'login first'}, 401)
-                if hashlib.sha256((d.get('old') or '').encode()).hexdigest() != u['pw']:
-                    return self._json({'err': 'current password wrong'}, 403)
-                new = (d.get('new') or '').strip()
-                if len(new) < 4: return self._json({'err': 'new password too short (4+)'}, 400)
-                CONN.execute('update users set pw=? where id=?', (hashlib.sha256(new.encode()).hexdigest(), u['id']))
-                CONN.commit()
-            self._json({'ok': True})
         elif self.path == '/api/comment':
             with LOCK: u = self._user(d)
             if not u: return self._json({'err': 'log in first'}, 401)
@@ -192,5 +223,5 @@ class Srv(http.server.ThreadingHTTPServer):
     allow_reuse_address = True
     daemon_threads = True
 with Srv(('0.0.0.0', PORT), H) as s:
-    print('AE3301 v8 → http://localhost:%d (pairing + live + tunnel-safe)' % PORT)
+    print('AE3301 v10 → http://localhost:%d (licensed)' % PORT)
     s.serve_forever()
