@@ -1,4 +1,4 @@
-# AE3301 server v7: stable DB + comments + media + views (stdlib only)
+# AE3301 server v8: stable DB + comments + media + views + pairing + tunnel-safe
 import http.server, socketserver, json, subprocess, os, tempfile, sqlite3, hashlib, uuid, time, threading, base64
 PORT = 9999
 ADMIN_KEY = 'ae3301-admin'
@@ -6,6 +6,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(BASE, 'ae3301.db')
 MEDIA = os.path.join(BASE, 'media')
 os.makedirs(MEDIA, exist_ok=True)
+PAIR = {}  # code -> (user_id, expiry)
 CONN = sqlite3.connect(DB, check_same_thread=False, timeout=20)
 CONN.row_factory = sqlite3.Row
 LOCK = threading.Lock()
@@ -28,6 +29,16 @@ class H(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-Length', str(len(b)))
         self.end_headers(); self.wfile.write(b)
     def _body(self):
+        # chunked support: tunnels/proxies often send POST bodies chunked
+        if 'chunked' in (self.headers.get('Transfer-Encoding') or '').lower():
+            data = b''
+            while True:
+                try: n = int(self.rfile.readline().strip(), 16)
+                except ValueError: break
+                if n <= 0: break
+                data += self.rfile.read(n); self.rfile.read(2)
+            try: return json.loads(data or b'{}')
+            except Exception: return {}
         n = int(self.headers.get('Content-Length', 0) or 0)
         try: return json.loads(self.rfile.read(n) or b'{}')
         except Exception: return {}
@@ -66,6 +77,19 @@ class H(http.server.SimpleHTTPRequestHandler):
                     except Exception: pass
             self._json({'out': out})
         elif self.path == '/api/qcheck': self._json({'ok': d.get('key') == ADMIN_KEY})
+        elif self.path == '/api/pair':
+            with LOCK: u = self._user(d)
+            if not u: return self._json({'err': 'login first'}, 401)
+            code = uuid.uuid4().hex[:6].upper()
+            PAIR[code] = (u['id'], time.time() + 300)
+            self._json({'code': code})
+        elif self.path == '/api/pairlogin':
+            c = (d.get('code') or '').strip().upper()
+            e = PAIR.get(c)
+            if not e or e[1] < time.time(): return self._json({'err': 'invalid code'}, 404)
+            with LOCK: row = CONN.execute('select name from users where id=?', (e[0],)).fetchone()
+            del PAIR[c]
+            self._json({'token': e[0], 'name': row['name'] if row else 'Explorer'})
         elif self.path == '/api/seen':
             with LOCK:
                 for i in (d.get('ids') or [])[:60]:
@@ -153,7 +177,9 @@ class H(http.server.SimpleHTTPRequestHandler):
                 CONN.commit()
             self._json({'ok': True})
         else: self.send_error(404)
-socketserver.TCPServer.allow_reuse_address = True
-with socketserver.TCPServer(('0.0.0.0', PORT), H) as s:
-    print('AE3301 v7 → http://localhost:%d' % PORT)
+class Srv(http.server.ThreadingHTTPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+with Srv(('0.0.0.0', PORT), H) as s:
+    print('AE3301 v8 → http://localhost:%d (pairing + live + tunnel-safe)' % PORT)
     s.serve_forever()
