@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
 <title>AE3301 · Admin Console</title>
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -32,7 +33,6 @@ table{width:100%;border-collapse:collapse}
 td,th{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:.9rem}
 #login{min-height:100vh;display:grid;place-items:center;padding:20px}
 #login .card{width:min(400px,94vw);text-align:center}
-.hide{display:none}
 </style>
 </head>
 <body>
@@ -40,7 +40,7 @@ td,th{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-
 <div id="login">
   <div class="card">
     <h1 style="font-size:2rem">AE3301</h1>
-    <p class="mono" style="color:var(--dim);letter-spacing:.3em;font-size:.65rem;margin:6px 0 18px">ADMIN CONSOLE</p>
+    <p class="mono" style="color:var(--dim);letter-spacing:.3em;font-size:.65rem;margin:6px 0 18px">ADMIN CONSOLE · PRIVATE</p>
     <input id="lu" placeholder="username" autocomplete="username">
     <input id="lp" type="password" placeholder="password" autocomplete="current-password">
     <button class="btn acc" id="lgo" style="width:100%;margin-top:8px">LOGIN</button>
@@ -48,7 +48,7 @@ td,th{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-
   </div>
 </div>
 
-<div id="app" class="wrap hide">
+<div id="app" class="wrap" style="display:none">
   <div class="row" style="justify-content:space-between">
     <h1 style="font-size:1.4rem">AE3301 <span style="color:var(--acc)">ADMIN</span></h1>
     <button class="btn sm" id="out">LOG OUT</button>
@@ -72,7 +72,7 @@ td,th{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-
     <div class="card" id="keylist"></div>
   </div>
 
-  <div id="tab-quest" class="hide">
+  <div id="tab-quest" style="display:none">
     <div class="card">
       <div class="grid">
         <select id="q-topic">
@@ -94,20 +94,23 @@ td,th{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-
     <div class="card" id="qlist"></div>
   </div>
 
-  <div id="tab-users" class="hide"><div class="card" id="usertable"></div></div>
+  <div id="tab-users" style="display:none"><div class="card" id="usertable"></div></div>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
-const TK = 'ae3301:admintoken';
+const TK = 'ae3301:adminweb';            /* console-only session, separate from the main site */
 const tok = () => localStorage.getItem(TK);
 async function api(p, b, method = 'POST') {
   try {
     const r = await fetch(p, { method, headers: { 'Content-Type': 'application/json' }, body: method === 'POST' ? JSON.stringify(b) : undefined });
+    if (r.status === 401 || r.status === 403) { localStorage.removeItem(TK); showLogin(); }
     return await r.json();
   } catch (e) { return { err: 'network' }; }
 }
 const msg = (el, t, ok) => { el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'err'); };
+function showLogin() { $('#app').style.display = 'none'; $('#login').style.display = 'grid'; }
+function enter() { $('#login').style.display = 'none'; $('#app').style.display = 'block'; loadKeys(); }
 
 /* login / logout */
 $('#lgo').onclick = async () => {
@@ -116,12 +119,12 @@ $('#lgo').onclick = async () => {
   else msg($('#lerr'), '✗ ' + (d.err || 'bad credentials'));
 };
 $('#out').onclick = () => { localStorage.removeItem(TK); location.reload(); };
-async function enter() { $('#login').classList.add('hide'); $('#app').classList.remove('hide'); loadKeys(); }
 
 /* tabs */
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {
+  if (!tok()) { showLogin(); return; }
   document.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b));
-  ['keys', 'quest', 'users'].forEach(t => $('#tab-' + t).classList.toggle('hide', t !== b.dataset.tab));
+  ['keys', 'quest', 'users'].forEach(t => { $('#tab-' + t).style.display = t === b.dataset.tab ? 'block' : 'none'; });
   if (b.dataset.tab === 'keys') loadKeys();
   if (b.dataset.tab === 'quest') loadQ();
   if (b.dataset.tab === 'users') loadU();
@@ -129,6 +132,7 @@ document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {
 
 /* keys */
 document.querySelectorAll('[data-gen]').forEach(b => b.onclick = async () => {
+  if (!tok()) { showLogin(); return; }
   const d = await api('/api/keygen', { admin: tok(), days: +b.dataset.gen });
   if (d.key) { msg($('#keymsg'), '✔ ' + d.key + '  — saved in list below', true); loadKeys(); }
   else msg($('#keymsg'), '✗ ' + (d.err || 'failed'));
@@ -147,6 +151,7 @@ async function loadKeys() {
 
 /* questions */
 $('#qgo').onclick = async () => {
+  if (!tok()) { showLogin(); return; }
   const opts = [$('#q-o0').value, $('#q-o1').value, $('#q-o2').value, $('#q-o3').value];
   const body = { admin: tok(), topic: $('#q-topic').value, tier: $('#q-tier').value, q: $('#q-q').value, options: opts, explain: $('#q-e').value, hint: $('#q-h').value };
   if (!body.q || opts.some(o => !o)) { msg($('#qmsg'), '✗ fill question + all 4 options'); return; }
@@ -173,8 +178,8 @@ async function loadU() {
     (Array.isArray(d) ? d : []).map((u, i) => '<tr><td>' + (i + 1) + '</td><td>' + u.name + '</td><td class="mono">' + u.xp + '</td><td class="mono">' + u.lessons + '</td></tr>').join('') + '</table>';
 }
 
-/* boot: auto-enter if a valid admin session exists */
-(async () => { const t = tok(); if (t) { const d = await api('/api/qcheck', { key: t }); if (d.ok) enter(); } })();
+/* boot: only the console's OWN session unlocks it */
+(async () => { const t = tok(); if (t) { const d = await api('/api/qcheck', { key: t }); if (d.ok) { enter(); return; } } showLogin(); })();
 </script>
 </body>
 </html>
